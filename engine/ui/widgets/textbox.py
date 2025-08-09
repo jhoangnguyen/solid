@@ -24,7 +24,7 @@ Expected companion:
 
 from __future__ import annotations
 
-from typing import List, Tuple
+from typing import List
 import pygame
 
 from engine.ui.style import Theme
