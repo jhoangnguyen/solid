@@ -188,6 +188,8 @@ class TextBox:
             y += h + line_gap
 
         layer.set_clip(prev_clip)
+        
+        self._draw_scrollbar(layer, viewport)
 
         # Opacity
         if self.opacity < 1.0:
@@ -313,3 +315,36 @@ class TextBox:
             parts.append(seg)
             i += best
         return parts
+
+    def _draw_scrollbar(self, layer: pygame.Surface, viewport: pygame.Rect) -> None:
+        sb = self.theme.scrollbar
+        # Track rect (relative to the widget layer)
+        t, r, b, l = self.theme.padding
+        track_x = self.rect.w - r - sb.margin - sb.width
+        track_y = t
+        track_h = self.rect.h - (t + b)
+        if track_h <= 0 or sb.width <= 0: return
+        
+        overflow = self._content_h > viewport.h
+        if not overflow and not sb.show_when_no_overflow:
+            return
+        
+        # Draw track
+        track_rect = pygame.Rect(track_x, track_y, sb.width, track_h)
+        pygame.draw.rect(layer, sb.track_color, track_rect, border_radius=sb.radius)
+        
+        # Thumb size/pos
+        if overflow:
+            ratio = max(0.0, min(1.0, viewport.h / max(1, self._content_h)))
+            thumb_h = max(sb.min_thumb_size, int(track_h * ratio))
+            max_scroll = self.max_scroll()
+            pos_ratio = 0.0 if max_scroll <= 0 else self.scroll_y / max_scroll
+            free = max(0, track_h - thumb_h)
+            thumb_y = track_y + int(free * pos_ratio)
+        else:
+            thumb_h = track_h
+            thumb_y = track_y
+            
+        thumb_rect = pygame.Rect(track_x, thumb_y, sb.width, thumb_h)
+        pygame.draw.rect(layer, sb.thumb_color, thumb_rect, border_radius=sb.radius)
+            

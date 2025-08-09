@@ -1,5 +1,16 @@
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, replace, field
 import pygame
+
+@dataclass
+class ScrollbarStyle:
+    width: int = 6
+    margin: int = -15
+    radius: int = 3
+    min_thumb_size: int = 24
+    show_when_no_overflow: bool = True
+    track_color: tuple[int, int, int, int] = (255, 255, 255, 32)
+    thumb_color: tuple[int, int, int, int] = (255, 255, 255, 192)
+    def derive(self, **overrides): return replace(self, **overrides)
 
 @dataclass
 class Theme:
@@ -11,6 +22,7 @@ class Theme:
     border_radius: int = 16
     padding: tuple[int, int, int, int] = (24, 28, 24, 28)
     line_spacing: int = 6
+    scrollbar: ScrollbarStyle = field(default_factory=ScrollbarStyle)
     
     def derive(self, **overrides) -> "Theme":
         """ Create a variant theme (e.g., per screen) without mutating the base. """
