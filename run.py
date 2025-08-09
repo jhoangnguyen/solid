@@ -15,7 +15,7 @@ def load_config() -> GameConfig:
         return GameConfig(
             width=int(data.get("width", 1200)),
             height=int(data.get("heihgt", 720)),
-            title=str(data.get("title", "Solid")),
+            title=str(data.get("title", "HORIZON")),
             bg_rgb=tuple(data.get("bg_rgb", (14, 15, 18))),
             fps=int(data.get("fps", 60))
         )
