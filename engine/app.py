@@ -31,9 +31,48 @@ class GameApp:
         self.anim = Animator()
 
         # textbox
-        tb_rect = compute_centered_rect(self.screen, 0.7, 0.45)
+        tb_rect = compute_centered_rect(self.screen, 0.4, 0.8)
         self.textbox = TextBox(tb_rect, self.styles.current)
         self.textbox.set_text("Hello! This box can fade and re-theme.\n\nScroll me.")
+        self.textbox.append_text("HORIZON")
+        self.textbox.append_text("HORIZON")
+        self.textbox.append_text("HORIZON")
+        self.textbox.append_text("HORIZON")
+        self.textbox.append_text("HORIZON")
+        self.textbox.append_text("HORIZON")
+        self.textbox.append_text("HORIZON")
+        self.textbox.append_text("HORIZON")
+        self.textbox.append_text("HORIZON")
+        self.textbox.append_text("HORIZON")
+        self.textbox.append_text("HORIZON")
+        self.textbox.append_text("HORIZON")
+        self.textbox.append_text("HORIZON")
+        self.textbox.append_text("HORIZON")
+        self.textbox.append_text("HORIZON")
+        self.textbox.append_text("HORIZON")
+        self.textbox.append_text("HORIZON")
+        self.textbox.append_text("HORIZON")
+        self.textbox.append_text("HORIZON")
+        self.textbox.append_text("HORIZON")
+        self.textbox.append_text("HORIZON")
+        self.textbox.append_text("HORIZON")
+        self.textbox.append_text("HORIZON")
+        self.textbox.append_text("HORIZON")
+        self.textbox.append_text("HORIZON")
+        self.textbox.append_text("HORIZON")
+        self.textbox.append_text("HORIZON")
+        self.textbox.append_text("HORIZON")
+        self.textbox.append_text("HORIZON")
+        self.textbox.append_text("HORIZON")
+        self.textbox.append_text("HORIZON")
+        self.textbox.append_text("HORIZON")
+        self.textbox.append_text("HORIZON")
+        self.textbox.append_text("HORIZON")
+        self.textbox.append_text("HORIZON")
+        self.textbox.append_text("HORIZON")
+        self.textbox.append_text("HORIZON")
+        self.textbox.append_text("HORIZON")
+        self.textbox.append_text("HORIZON")
 
         # fade-in on start
         self.textbox.opacity = 0.0
@@ -65,7 +104,7 @@ class GameApp:
                     self.textbox.scroll(-e.y * 40)
                 elif e.type == pygame.VIDEORESIZE:
                     self.screen = pygame.display.set_mode((e.w, e.h), pygame.RESIZABLE)
-                    self.textbox.on_resize(compute_centered_rect(self.screen, 0.7, 0.45))
+                    self.textbox.on_resize(compute_centered_rect(self.screen, 0.4, 0.8))
                 
     def update(self, dt: float):
         # Function to run on delta time to update game state. Will be blank for now.
