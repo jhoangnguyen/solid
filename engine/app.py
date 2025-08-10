@@ -38,57 +38,35 @@ class GameApp:
             intro_offset_px=cfg.reveal.intro_offset_px,
             stick_to_bottom_threshold_px=cfg.reveal.stick_to_bottom_threshold_px,
         ))
-        # self.textbox.set_text(
-        #     "Centered scrolling textbox.\n"
-        #     "Mouse wheel / PgUp / PgDn / Home / End.\n\n"
-        #     "Resize window to reflow.\n" + ("Lorem ipsum " * 500)
-        # )
         self.textbox.queue_lines(
             "You found it. The last message.\n"
             "Keep scrolling. There’s more below.\n"
-            "This line should also fade/slide in subtly." + ("Loren ipsum \n" * 500)
+            "This line should also fade/slide in subtly."
         )
+        for i in range(0, 500): 
+            self.textbox.append_line("Auto line " + str(i), wait_for_input= True)
+
         self.hud_font = pygame.font.Font(None, 24)
-        
-    # def handle_input(self):
-    #     for e in pygame.event.get():
-    #         if e.type == pygame.QUIT:
-    #             self.running = False
-    #         elif e.type == pygame.KEYDOWN:
-    #             if e.key == pygame.K_ESCAPE:
-    #                 self.running = False
-    #             elif e.key == pygame.K_PAGEUP:
-    #                 page = self.textbox.viewport_height * self.cfg.input.page_scroll_frac
-    #                 self.textbox.scroll(-page)
-    #             elif e.key == pygame.K_PAGEDOWN:
-    #                 page = self.textbox.viewport_height * self.cfg.input.page_scroll_frac
-    #                 self.textbox.scroll(+page)
-    #             elif e.key == pygame.K_HOME:
-    #                 self.textbox.scroll_to_top()
-    #             elif e.key == pygame.K_END:
-    #                 self.textbox.scroll_to_bottom()
-    #         elif e.type == pygame.MOUSEWHEEL:
-    #             self.textbox.scroll(-e.y * self.cfg.input.scroll_wheel_pixels)
-    #         elif e.type == pygame.VIDEORESIZE:
-    #             self.screen = pygame.display.set_mode((e.w, e.h), pygame.RESIZABLE)
-    #             new_rect = compute_centered_rect(
-    #                 self.screen, self.cfg.textbox.width_frac, self.cfg.textbox.height_frac
-    #             )
-    #             self.textbox.on_resize(new_rect)
     
     def handle_input(self):
         for e in pygame.event.get():
-            if e.type == pygame.QUIT: self.running = False
+            if e.type == pygame.QUIT: 
+                self.running = False
             elif e.type == pygame.KEYDOWN:
-                if e.key == pygame.K_ESCAPE: self.running = False
-                elif e.key == pygame.K_SPACE:
-                    self.textbox.advance_line_now()  # skip delay, show next
+                if e.key == pygame.K_ESCAPE: 
+                    self.running = False
+                elif e.key in (pygame.K_SPACE, pygame.K_RETURN):
+                    self.textbox.on_player_press()
+                # elif e.key == pygame.K_SPACE:
+                #     self.textbox.advance_line_now()  # skip delay, show next
                 elif e.key == pygame.K_PAGEUP:
                     self.textbox.scroll(-self.textbox.viewport_height * self.cfg.input.page_scroll_frac)
                 elif e.key == pygame.K_PAGEDOWN:
                     self.textbox.scroll(+self.textbox.viewport_height * self.cfg.input.page_scroll_frac)
                 elif e.key == pygame.K_HOME: self.textbox.scroll_to_top()
                 elif e.key == pygame.K_END: self.textbox.scroll_to_bottom()
+            elif e.type == pygame.MOUSEBUTTONDOWN and e.button == 1:
+                self.textbox.on_player_press()
             elif e.type == pygame.MOUSEWHEEL:
                 self.textbox.scroll(-e.y * self.cfg.input.scroll_wheel_pixels)
             elif e.type == pygame.VIDEORESIZE:

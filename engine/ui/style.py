@@ -4,7 +4,7 @@ import pygame
 @dataclass
 class ScrollbarStyle:
     width: int = 6
-    margin: int = -15
+    margin: int = 8
     radius: int = 3
     min_thumb_size: int = 24
     show_when_no_overflow: bool = True

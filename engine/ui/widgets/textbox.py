@@ -25,7 +25,9 @@ Expected companion:
 from __future__ import annotations
 
 from typing import List, Deque, Optional
+from collections import deque
 import pygame
+import math
 
 from engine.ui.style import Theme
 from dataclasses import dataclass
@@ -60,6 +62,8 @@ class _Entry:
     
     # State
     visible: bool = False   # Becomes True when released from queue
+    
+    wait_for_input: bool = False
 
 class TextBox:
     """
@@ -128,7 +132,7 @@ class TextBox:
         
         self._wrap_w: int = -1
         self._entries_visible: List[_Entry] = []
-        self._entries_pending: Deque[_Entry] = Deque()
+        self._entries_pending: Deque[_Entry] = deque()
         self._content_h: int = 0
         self._release_timer: float = 0.0
         
@@ -148,18 +152,15 @@ class TextBox:
         self._entries_visible.append(e)
         self._recalc_content_height()
         self.scroll_to_top()
-        # self._text = text or ""
-        # self.scroll_y = 0.0
-        # self._invalidate_layout()
         
-    def queue_lines(self, text_block: str) -> None:
+    def queue_lines(self, text_block: str, wait_for_input: bool = False) -> None:
         """Split on newline and enqueue each logical line with animation."""
         for line in (text_block or "").splitlines():
-            self.append_line(line, animated=True)
+            self.append_line(line, animated=True, wait_for_input=wait_for_input)
             
-    def append_line(self, line: str, animated: bool = True) -> None:
-        e = self._make_entry(line, animated=animated)
-        if animated:
+    def append_line(self, line: str, animated: bool = True, wait_for_input: bool = False) -> None:
+        e = self._make_entry(line, animated=animated, wait_for_input=wait_for_input)
+        if animated or wait_for_input:
             self._entries_pending.append(e)
         else:
             e.visible = True
@@ -169,27 +170,17 @@ class TextBox:
             if self._should_stick_to_bottom():
                 self.scroll_to_bottom()
 
-    # def append_text(self, text: str) -> None:
-    #     if not text:
-    #         return
-    #     self._text = (self._text + ("\n" if self._text else "") + text)
-    #     self._invalidate_layout()
-
     def clear(self) -> None:
         self._entries_visible.clear()
         self._entries_pending.clear()
         self._content_h = 0
         self.scroll_y = 0.0
         self._release_timer = 0
-        # self._text = ""
-        # self.scroll_y = 0.0
-        # self._invalidate_layout()
 
     def on_resize(self, new_rect: pygame.Rect) -> None:
         """Update geometry; layout is recomputed lazily on draw()."""
         self.rect = new_rect.copy()
         self._wrap_w = -1  # Force relayout next draw
-        # self._invalidate_layout()
 
     def set_theme(self, theme: Theme) -> None:
         """Swap to a new theme (colors/font/spacing)."""
@@ -205,21 +196,46 @@ class TextBox:
         
         # Release next line when last visible is done + delay
         if self._entries_pending:
-            last_done = (not self._entries_visible) or self._entries_visible[-1]
-            if last_done:
-                self._release_timer += dt
-                if self._release_timer >= rp.per_line_delay:
-                    self._release_timer = 0.0
-                    nxt = self._entries_pending.popleft()
-                    nxt.visible = True
-                    self._entries_visible.append(nxt)
-                    self._recalc_content_height()
-                    if self._should_stick_to_bottom():
-                        self.scroll_to_bottom()
+            first = self._entries_pending[0]
+            if not first.wait_for_input:
+                # last_done = (not self._entries_visible) or self._entries_visible[-1]
+                last_done = (not self._entries_visible) or (self._entries_visible[-1].t >= self._entries_visible[-1].duration - 1e-4)
+                if last_done:
+                    self._release_timer += dt
+                    if self._release_timer >= rp.per_line_delay:
+                        self._release_timer = 0.0
+                        nxt = self._entries_pending.popleft()
+                        nxt.visible = True
+                        self._entries_visible.append(nxt)
+                        self._recalc_content_height()
+                        if self._should_stick_to_bottom():
+                            self.scroll_to_bottom()
                         
+        animating = False
         for e in self._entries_visible:
             if e.t < e.duration:
                 e.t = min(e.duration, e.t + dt)
+                animating = True
+        
+        # If user is near the bottom, keep bottom anchored to avoid clipping during slide
+        if animating and self._should_stick_to_bottom():
+            self.scroll_to_bottom()
+            
+    def on_player_press(self) -> None:
+        # If a visible line is still animating, finish it
+        for e in reversed(self._entries_visible):
+            if e.t < e.duration:
+                e.t = e.duration
+                return
+        # Otherwise, release the next queued line (manual or auto)
+        self._release_timer = 0.0
+        if self._entries_pending:
+            nxt = self._entries_pending.popleft()
+            nxt.visible = True
+            self._entries_visible.append(nxt)
+            self._recalc_content_height()
+            if self._should_stick_to_bottom():
+                self.scroll_to_bottom()
                 
     def advance_line_now(self) -> None:
         """Immediately show the next queued line (e.g., on click)."""
@@ -237,6 +253,11 @@ class TextBox:
         if dy == 0:
             return
         self.scroll_y = max(0.0, min(self.max_scroll(), self.scroll_y + dy))
+        
+    def max_scroll(self) -> float:
+        """Maximum scroll offset in pixels given current content and viewport."""
+        visual_h = self._content_h + self._anim_bottom_extra()
+        return max(0.0, float(math.ceil(visual_h - self.viewport_height)))
 
     def scroll_to_top(self) -> None:
         self.scroll_y = 0.0
@@ -261,9 +282,6 @@ class TextBox:
     @property
     def is_at_bottom(self) -> bool:
         return self.scroll_y >= self.max_scroll() - 1e-3
-    
-    def max_scroll(self) -> float:
-        return max(0.0, float(self._content_h - self.viewport_height))
 
     # --------------------------- Drawing ---------------------------
 
@@ -288,7 +306,7 @@ class TextBox:
         # Inner viewport (relative to layer)
         t, r, b, l = th.padding
         sb = th.scrollbar
-        reserve_w = sb.width + sb.margin
+        reserve_w = max(0, sb.width + sb.margin)
         # viewport = pygame.Rect(l, t, max(0, self.rect.w - (l + r)), max(0, self.rect.h - (t + b)))
         viewport = pygame.Rect(l, t, max(0, self.rect.w - (l + r + reserve_w)), max(0, self.rect.h - (t + b)))
 
@@ -299,14 +317,7 @@ class TextBox:
         prev_clip = layer.get_clip()
         layer.set_clip(viewport)
 
-        y = viewport.y - int(self.scroll_y)
-        # line_gap = th.line_spacing
-        
-        # for line_surf in self._cache_surfaces:
-        #     h = line_surf.get_height()
-        #     if y + h >= viewport.y and y <= viewport.bottom:
-        #         layer.blit(line_surf, (viewport.x, y))
-        #     y += h + line_gap
+        y = viewport.y - int(round(self.scroll_y))
         
         gap = th.line_spacing
         for e in self._entries_visible:
@@ -357,9 +368,9 @@ class TextBox:
         # Clamp scroll if content shrank
         self.scroll_y = min(self.scroll_y, self.max_scroll())
         
-    def _make_entry(self, text: str, animated: bool) -> _Entry:
+    def _make_entry(self, text: str, animated: bool, wait_for_input: bool = False) -> _Entry:
         # Temporary layout using current wrap width; will be reubit on draw if width changes
-        surfaces, height = self._layout_text(text, self.wrap_w if self._wrap_w > 0 else 1024)
+        surfaces, height = self._layout_text(text, self._wrap_w if self._wrap_w > 0 else 1024)
         rp = self._reveal_params
         return _Entry(
             text=text,
@@ -368,12 +379,9 @@ class TextBox:
             t=0.0,
             duration=(rp.intro_duration if animated else 0.0),
             offset_px=(rp.intro_offset_px if animated else 0),
-            visible=False
+            visible=False,
+            wait_for_input=wait_for_input,
         )
-        
-    def max_scroll(self) -> float:
-        """Maximum scroll offset in pixels given current content and viewport."""
-        return max(0.0, float(self._content_h - self.viewport_height))
 
     def _invalidate_layout(self, rebuild_font: bool = False) -> None:
         if rebuild_font:
@@ -383,38 +391,6 @@ class TextBox:
 
     def _ensure_layout(self, wrap_w: int) -> None:
         """(Re)build wrapped line surfaces if width or content changed."""
-        # # Guard against zero/negative width (e.g., very small window)
-        # if wrap_w <= 0:
-        #     self._cache_wrap_w = wrap_w
-        #     self._cache_surfaces = []
-        #     self._content_h = 0
-        #     self.scroll_y = 0.0
-        #     return
-
-        # if wrap_w == self._cache_wrap_w:
-        #     return
-
-        # # (Re)create font to reflect theme changes (cheap in pygame)
-        # self.font = pygame.font.Font(self.theme.font_path, self.theme.font_size)
-
-        # self._cache_wrap_w = wrap_w
-        # wrapped_lines = self._wrap_text(self._text, wrap_w)
-
-        # # Render all lines once (subsequent draws just blit)
-        # color = self.theme.text_rgb
-        # render = self.font.render
-        # self._cache_surfaces = [render(line, True, color) for line in wrapped_lines]
-
-        # # Compute total content height
-        # line_gap = self.theme.line_spacing
-        # if self._cache_surfaces:
-        #     heights = [surf.get_height() for surf in self._cache_surfaces]
-        #     self._content_h = sum(heights) + (len(heights) - 1) * line_gap
-        # else:
-        #     self._content_h = 0
-
-        # # Clamp scroll if content shrank
-        # self.scroll_y = min(self.scroll_y, self.max_scroll())
         if wrap_w <= 0:
             self._wrap_w = wrap_w
             for e in self._entries_visible:
@@ -517,107 +493,13 @@ class TextBox:
 
         thumb_rect = pygame.Rect(track_x, thumb_y, sb.width, thumb_h)
         pygame.draw.rect(layer, sb.thumb_color, thumb_rect, border_radius=sb.radius)
-
-    # def _wrap_text(self, text: str, wrap_w: int) -> List[str]:
-    #     """
-    #     Word-wrap text for the given width in pixels.
-
-    #     - Respects existing '\n'.
-    #     - Splits overlong "words" with a binary search into fitting chunks.
-    #     - Keeps empty lines.
-    #     """
-    #     if not text:
-    #         return []
-
-    #     out: List[str] = []
-    #     measure = self.font.size
-
-    #     for raw in text.splitlines():
-    #         words = raw.split(" ")
-    #         if not words:
-    #             out.append("")  # preserve empty line
-    #             continue
-
-    #         cur = ""
-    #         for w in words:
-    #             cand = w if not cur else f"{cur} {w}"
-    #             if measure(cand)[0] <= wrap_w:
-    #                 cur = cand
-    #                 continue
-
-    #             # current line full; flush it
-    #             if cur:
-    #                 out.append(cur)
-    #             # handle long single word
-    #             if measure(w)[0] <= wrap_w:
-    #                 cur = w
-    #             else:
-    #                 chunks = self._hard_wrap_long_word(w, wrap_w, measure)
-    #                 # all chunks except last are complete lines
-    #                 out.extend(chunks[:-1])
-    #                 cur = chunks[-1] if chunks else ""
-
-    #         out.append(cur)
-
-    #     return out
-
-    # def _hard_wrap_long_word(
-    #     self, word: str, wrap_w: int, measure
-    # ) -> List[str]:
-    #     """
-    #     Split a single long token into chunks that fit wrap_w using binary search.
-    #     Returns a list of chunks (no hyphen inserted).
-    #     """
-    #     parts: List[str] = []
-    #     i = 0
-    #     n = len(word)
-    #     while i < n:
-    #         lo, hi = 1, n - i
-    #         best = 1
-    #         while lo <= hi:
-    #             mid = (lo + hi) // 2
-    #             seg = word[i:i + mid]
-    #             if measure(seg)[0] <= wrap_w:
-    #                 best = mid
-    #                 lo = mid + 1
-    #             else:
-    #                 hi = mid - 1
-    #         seg = word[i:i + best]
-    #         if not seg:
-    #             break
-    #         parts.append(seg)
-    #         i += best
-    #     return parts
-
-    # def _draw_scrollbar(self, layer: pygame.Surface, viewport: pygame.Rect) -> None:
-    #     sb = self.theme.scrollbar
-    #     # Track rect (relative to the widget layer)
-    #     t, r, b, l = self.theme.padding
-    #     track_x = self.rect.w - r - sb.margin - sb.width
-    #     track_y = t
-    #     track_h = self.rect.h - (t + b)
-    #     if track_h <= 0 or sb.width <= 0: return
         
-    #     overflow = self._content_h > viewport.h
-    #     if not overflow and not sb.show_when_no_overflow:
-    #         return
-        
-    #     # Draw track
-    #     track_rect = pygame.Rect(track_x, track_y, sb.width, track_h)
-    #     pygame.draw.rect(layer, sb.track_color, track_rect, border_radius=sb.radius)
-        
-    #     # Thumb size/pos
-    #     if overflow:
-    #         ratio = max(0.0, min(1.0, viewport.h / max(1, self._content_h)))
-    #         thumb_h = max(sb.min_thumb_size, int(track_h * ratio))
-    #         max_scroll = self.max_scroll()
-    #         pos_ratio = 0.0 if max_scroll <= 0 else self.scroll_y / max_scroll
-    #         free = max(0, track_h - thumb_h)
-    #         thumb_y = track_y + int(free * pos_ratio)
-    #     else:
-    #         thumb_h = track_h
-    #         thumb_y = track_y
-            
-    #     thumb_rect = pygame.Rect(track_x, thumb_y, sb.width, thumb_h)
-    #     pygame.draw.rect(layer, sb.thumb_color, thumb_rect, border_radius=sb.radius)
-            
+    def _anim_bottom_extra(self) -> int:
+        if not self._entries_visible:
+            return 0
+        e = self._entries_visible[-1]
+        if e.duration <= 0 or e.t >= e.duration:
+            return 0
+        # Remaining slide distance (how far below it starts)
+        u = min(1.0, max(0.0, e.t / e.duration))
+        return int((1.0 - u) * e.offset_px)
