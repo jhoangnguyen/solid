@@ -178,9 +178,23 @@ class TextBox:
         self._release_timer = 0
 
     def on_resize(self, new_rect: pygame.Rect) -> None:
-        """Update geometry; layout is recomputed lazily on draw()."""
+        # remember where we were before changing geometry
+        was_bottom = self._near_bottom()
+        old_max = max(1e-6, self.max_scroll())
+        ratio = self.scroll_y / old_max  # 0..1
+
+        # apply new geometry
         self.rect = new_rect.copy()
-        self._wrap_w = -1  # Force relayout next draw
+
+        # force relayout NOW for the new width so max_scroll() is accurate
+        self._wrap_w = -1
+        self._ensure_layout(self._viewport_width())
+
+        # restore position
+        if was_bottom:
+            self.scroll_to_bottom()
+        else:
+            self.scroll_y = self.max_scroll() * ratio
 
     def set_theme(self, theme: Theme) -> None:
         """Swap to a new theme (colors/font/spacing)."""
@@ -204,11 +218,12 @@ class TextBox:
                     self._release_timer += dt
                     if self._release_timer >= rp.per_line_delay:
                         self._release_timer = 0.0
+                        was_bottom = self._near_bottom()
                         nxt = self._entries_pending.popleft()
                         nxt.visible = True
                         self._entries_visible.append(nxt)
                         self._recalc_content_height()
-                        if self._should_stick_to_bottom():
+                        if was_bottom:
                             self.scroll_to_bottom()
                         
         animating = False
@@ -222,19 +237,22 @@ class TextBox:
             self.scroll_to_bottom()
             
     def on_player_press(self) -> None:
-        # If a visible line is still animating, finish it
-        for e in reversed(self._entries_visible):
-            if e.t < e.duration:
-                e.t = e.duration
-                return
-        # Otherwise, release the next queued line (manual or auto)
-        self._release_timer = 0.0
+        # A) if the newest visible line is mid-animation, finish it
+        if self._entries_visible:
+            last = self._entries_visible[-1]
+            if last.t < last.duration:
+                last.t = last.duration
+                # don't return; also release the next line so one press always advances
+
+        # B) release the next queued line (manual or auto)
         if self._entries_pending:
+            was_bottom = self._near_bottom()
+            self._release_timer = 0.0  # skip auto delay
             nxt = self._entries_pending.popleft()
             nxt.visible = True
             self._entries_visible.append(nxt)
             self._recalc_content_height()
-            if self._should_stick_to_bottom():
+            if was_bottom:
                 self.scroll_to_bottom()
                 
     def advance_line_now(self) -> None:
@@ -256,8 +274,7 @@ class TextBox:
         
     def max_scroll(self) -> float:
         """Maximum scroll offset in pixels given current content and viewport."""
-        visual_h = self._content_h + self._anim_bottom_extra()
-        return max(0.0, float(math.ceil(visual_h - self.viewport_height)))
+        return max(0.0, float(math.ceil(self._visual_content_height() - self.viewport_height)))
 
     def scroll_to_top(self) -> None:
         self.scroll_y = 0.0
@@ -320,21 +337,28 @@ class TextBox:
         y = viewport.y - int(round(self.scroll_y))
         
         gap = th.line_spacing
+
         for e in self._entries_visible:
-            # Animation easing
+            # animation easing per entry
             u = 1.0 if e.duration <= 0 else _ease_out_cubic(e.t / e.duration)
             offset = int((1.0 - u) * e.offset_px)
             alpha = int(255 * u)
-            
-            for surf in e.surfaces:
+
+            for j, surf in enumerate(e.surfaces):
                 h = surf.get_height()
                 if y + h + offset >= viewport.y and y + offset <= viewport.bottom:
-                    # Apply per-line alpha without permanent mutation
                     prev_alpha = surf.get_alpha()
                     surf.set_alpha(alpha)
                     layer.blit(surf, (viewport.x, y + offset))
                     surf.set_alpha(prev_alpha)
-                y += h + gap
+
+                y += h
+                if j < len(e.surfaces) - 1:
+                    y += gap  # add spacing ONLY between wrapped lines inside the same entr
+            
+            if e is not self._entries_visible[-1]:
+                y += th.entry_gap
+                
 
         layer.set_clip(prev_clip)
         
@@ -355,14 +379,15 @@ class TextBox:
         return self.max_scroll() - self.scroll_y <= max(0, px)
     
     def _recalc_content_height(self) -> None:
-        gap = self.theme.line_spacing
         total = 0
         first = True
-        for e in self._entries_visible:
+        for idx, e in enumerate(self._entries_visible):
             if not first:
                 # Line gap already included in entry heights per line, so no extra between entries
                 pass
             total += e.height
+            if idx < len(self._entries_visible) - 1:
+                total += self.theme.entry_gap
             first = False
         self._content_h = total
         # Clamp scroll if content shrank
@@ -474,7 +499,7 @@ class TextBox:
         track_h = self.rect.h - (t + b)
         if track_h <= 0 or sb.width <= 0: return
 
-        overflow = self._content_h > viewport.h
+        overflow = self._visual_content_height() > viewport.h
         if not overflow and not sb.show_when_no_overflow:
             return
 
@@ -482,9 +507,11 @@ class TextBox:
         pygame.draw.rect(layer, sb.track_color, track_rect, border_radius=sb.radius)
 
         if overflow:
-            ratio = max(0.0, min(1.0, viewport.h / max(1, self._content_h)))
+            ratio = max(0.0, min(1.0, viewport.h / max(1, self._visual_content_height())))
             thumb_h = max(sb.min_thumb_size, int(track_h * ratio))
-            pos_ratio = 0.0 if self.max_scroll() <= 0 else self.scroll_y / self.max_scroll()
+            max_sc = max(1e-6, self.max_scroll())
+            # pos_ratio = 0.0 if self.max_scroll() <= 0 else self.scroll_y / self.max_scroll()
+            pos_ratio = self.scroll_y / max_sc
             free = max(0, track_h - thumb_h)
             thumb_y = track_y + int(free * pos_ratio)
         else:
@@ -503,3 +530,16 @@ class TextBox:
         # Remaining slide distance (how far below it starts)
         u = min(1.0, max(0.0, e.t / e.duration))
         return int((1.0 - u) * e.offset_px)
+    
+    def _visual_content_height(self) -> int:
+        return self._content_h + self._anim_bottom_extra()
+
+    def _near_bottom(self) -> bool:
+        px = getattr(self._reveal_params, "stick_to_bottom_threshold_px", 24)
+        return (self.max_scroll() - self.scroll_y) <= max(0, px)
+    
+    def _viewport_width(self) -> int:
+        t, r, b, l = self.theme.padding
+        sb = self.theme.scrollbar
+        reserve_w = max(0, sb.width + sb.margin)
+        return max(0, self.rect.w - (l + r + reserve_w))

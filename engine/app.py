@@ -5,19 +5,6 @@ from engine.ui.widgets.textbox import TextBox, RevealParams
 from engine.ui.anim import Animator, Tween
 from engine.settings import load_settings, AppCfg
 
-"""
-Game Config that will be auto-instantiated with @dataclass.
-NOTE: Currently hardcoding the window size, game title, background color, and the fps.
-"""
-# @dataclass
-# class GameConfig:
-#     width: int = 1200 
-#     height: int = 720
-#     title: str = "HORIZON"
-#     bg_rgb: tuple[int, int, int] = (14, 15, 18)
-#     fps: int = 60
-    
-    
 class GameApp:
     def __init__(self, cfg: AppCfg):
         self.cfg = cfg
@@ -43,7 +30,7 @@ class GameApp:
             "Keep scrolling. There’s more below.\n"
             "This line should also fade/slide in subtly."
         )
-        for i in range(0, 500): 
+        for i in range(0, 100): 
             self.textbox.append_line("Auto line " + str(i), wait_for_input= True)
 
         self.hud_font = pygame.font.Font(None, 24)
@@ -57,8 +44,6 @@ class GameApp:
                     self.running = False
                 elif e.key in (pygame.K_SPACE, pygame.K_RETURN):
                     self.textbox.on_player_press()
-                # elif e.key == pygame.K_SPACE:
-                #     self.textbox.advance_line_now()  # skip delay, show next
                 elif e.key == pygame.K_PAGEUP:
                     self.textbox.scroll(-self.textbox.viewport_height * self.cfg.input.page_scroll_frac)
                 elif e.key == pygame.K_PAGEDOWN:
@@ -75,7 +60,6 @@ class GameApp:
                 
     def update(self, dt: float):
         # Function to run on delta time to update game state. Will be blank for now.
-        # self.anim.update(dt)
         self.textbox.update(dt)
         # pass
     

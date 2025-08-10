@@ -23,6 +23,7 @@ class Theme:
     padding: tuple[int, int, int, int] = (24, 28, 24, 28)
     line_spacing: int = 6
     scrollbar: ScrollbarStyle = field(default_factory=ScrollbarStyle)
+    entry_gap: int = 5
     
     def derive(self, **overrides) -> "Theme":
         """ Create a variant theme (e.g., per screen) without mutating the base. """
