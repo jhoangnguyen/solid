@@ -107,6 +107,7 @@ class TextBox:
         "_entries_pending",
         "_release_timer",
         "_reveal_params",
+        "_blink_t"
     )
 
     def __init__(self, rect: pygame.Rect, theme: Theme, reveal: Optional[RevealParams]=None):
@@ -126,8 +127,8 @@ class TextBox:
         self._entries_pending: Deque[_Entry] = deque()
         self._content_h: int = 0
         self._release_timer: float = 0.0
-        
         self._reveal_params = reveal or RevealParams()
+        self._blink_t: float = 0.0
 
     # -------------------------- Public API --------------------------
     
@@ -167,6 +168,7 @@ class TextBox:
         self._content_h = 0
         self.scroll_y = 0.0
         self._release_timer = 0
+        self._blink_t = 0.0
 
     def on_resize(self, new_rect: pygame.Rect) -> None:
         # remember where we were before changing geometry
@@ -197,6 +199,7 @@ class TextBox:
         """Advance line intro animations and release queued lines over time."""
         if dt <= 0: return
         rp = self._reveal_params
+        self._blink_t += dt
         
         # Release next line when last visible is done + delay
         if self._entries_pending:
@@ -323,8 +326,9 @@ class TextBox:
         y = viewport.y - int(round(self.scroll_y))
         
         gap = th.line_spacing
+        indicator_pos = None
 
-        for e in self._entries_visible:
+        for idx_entry, e in enumerate(self._entries_visible):
             # animation easing per entry
             u = 1.0 if e.duration <= 0 else _ease_out_cubic(e.t / e.duration)
             offset = int((1.0 - u) * e.offset_px)
@@ -332,6 +336,13 @@ class TextBox:
 
             for j, surf in enumerate(e.surfaces):
                 h = surf.get_height()
+                
+                if (e.wait_for_input
+                    and e.t >= e.duration - 1e-4
+                    and j == len(e.surfaces) - 1 
+                    and idx_entry == len(self._entries_visible) - 1
+                ):
+                    indicator_pos = (viewport.x + surf.get_width(), y + offset, h)
                 if y + h + offset >= viewport.y and y + offset <= viewport.bottom:
                     prev_alpha = surf.get_alpha()
                     surf.set_alpha(alpha)
@@ -342,8 +353,11 @@ class TextBox:
                 if j < len(e.surfaces) - 1:
                     y += gap  # add spacing ONLY between wrapped lines inside the same entr
             
-            if e is not self._entries_visible[-1]:
+            if idx_entry < len(self._entries_visible) - 1:
                 y += th.entry_gap
+        
+        if indicator_pos:
+            self._draw_wait_indicator(layer, viewport, indicator_pos)
                 
 
         layer.set_clip(prev_clip)
@@ -528,3 +542,93 @@ class TextBox:
     def _viewport_rect(self) -> pygame.Rect:
         t, r, b, l = self.theme.padding
         return pygame.Rect(l, t, self._viewport_width(), max(0, self.rect.h - (t + b)))
+    
+    def _get_wait_style(self) -> dict:
+        defaults = {
+            "enabled": True,
+            "char": "\u25BC",
+            "color": getattr(self.theme, "text_rgb", (237, 237, 237)),
+            "period": 1.0,
+            "alpha_min": 40,
+            "alpha_max": 255,
+            "offset_x": 6,
+            "offset_y": 2,
+            "scale": 1.0,
+            "font_path": None,
+            "align": "baseline",
+        }
+        wi = getattr(self.theme, "wait_indicator", None)
+        if isinstance(wi, dict):
+            defaults.update({k: wi[k] for k in wi if k in defaults})
+        elif wi is not None:
+            for k in list(defaults.keys()):
+                if hasattr(wi, k):
+                    defaults[k] = getattr(wi, k)
+        return defaults
+    
+    def _draw_wait_indicator(self, layer: pygame.Surface, viewport: pygame.Rect, info: tuple) -> None:
+        x_text_end, y_line_top, line_h = info
+        wi = self._get_wait_style()
+        if not wi.get("enabled", True):
+            return
+        
+        # Compute blink alpha (time-source agnostic)
+        period = max(1e-6, float(wi.get("period", 1.0)))
+
+        # Prefer the textbox's animation clock; if it isn't advancing for any reason,
+        # fall back to global time so the cue keeps breathing
+        t = self._blink_t
+        if t <= 1e-8:
+            t = pygame.time.get_ticks() * 0.001  # seconds
+
+        phase = (t / period) % 1.0                  # 0..1
+        s = 0.5 * (1.0 + math.sin(2.0 * math.pi * phase))   # 0..1 (ease-y breathing)
+        alpha = int(wi["alpha_min"] + (wi["alpha_max"] - wi["alpha_min"]) * s)
+                
+        scale = max(0.1, float(wi["scale"]))
+        size = max(8, int(self.theme.font_size * scale))
+        font_path = wi.get("font_path") or self.theme.font_path  # <-- use indicator fallback if provided
+
+        font = pygame.font.Font(font_path, size)
+        char = str(wi["char"])
+
+        # If the font doesn't have the glyph, metrics() returns [None]
+        has_glyph = bool(font.metrics(char) and font.metrics(char)[0])
+        if has_glyph:
+            glyph = font.render(char, True, wi["color"])
+
+            # --- Robust fade: compose onto a fresh SRCALPHA surface, then multiply alpha ---
+            blended = pygame.Surface(glyph.get_size(), pygame.SRCALPHA)
+            blended.blit(glyph, (0, 0))  # copy pixels (keeps per-pixel edges)
+
+            # Multiply both RGB and A by our blink alpha.
+            # This works consistently across SDL/driver combos, even when set_alpha() is ignored.
+            blended.fill((255, 255, 255, alpha), special_flags=pygame.BLEND_RGBA_MULT)
+
+            # Baseline alignment (what you have now)
+            if wi.get("align", "baseline") == "baseline":
+                baseline_y = y_line_top + self.font.get_ascent()
+                y = baseline_y - font.get_ascent() + int(wi["offset_y"])
+            else:
+                baseline_bottom = y_line_top + line_h
+                y = baseline_bottom - blended.get_height() - int(wi["offset_y"])
+
+            x = x_text_end + int(wi["offset_x"])
+            if x + blended.get_width() > viewport.right:
+                x = viewport.right - blended.get_width()
+            if y < viewport.y:
+                y = viewport.y
+
+            layer.blit(blended, (x, y))
+        else:
+            # Fallback: draw a small filled triangle (vector), so it always shows
+            h = max(6, int(line_h * 0.5))
+            w = max(6, int(h * 1.1))
+            x = x_text_end + int(wi["offset_x"])
+            baseline_bottom = y_line_top + line_h
+            y = baseline_bottom - h - int(wi["offset_y"])
+            if x + w > viewport.right:
+                x = viewport.right - w
+            tri = pygame.Surface((w, h), pygame.SRCALPHA)
+            pygame.draw.polygon(tri, (*wi["color"], alpha), [(0, 0), (w, 0), (w // 2, h)])
+            layer.blit(tri, (x, y))

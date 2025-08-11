@@ -13,6 +13,20 @@ class ScrollbarStyle:
     def derive(self, **overrides): return replace(self, **overrides)
 
 @dataclass
+class WaitIndicatorStyle:
+    enabled: bool = True
+    char: str = "\u25BC"
+    color: tuple[int, int, int] = (237, 237, 237)
+    period: float = 1.2
+    alpha_min: int = 40
+    alpha_max: int = 255
+    offset_x: int = 6
+    offset_y: int = 2
+    scale: float = 1.0
+    font_path: str | None = None
+
+
+@dataclass
 class Theme:
     font_path: str | None = None
     font_size: int = 22
@@ -24,6 +38,7 @@ class Theme:
     line_spacing: int = 6
     scrollbar: ScrollbarStyle = field(default_factory=ScrollbarStyle)
     entry_gap: int = 5
+    wait_indicator: WaitIndicatorStyle = field(default_factory=WaitIndicatorStyle)
     
     def derive(self, **overrides) -> "Theme":
         """ Create a variant theme (e.g., per screen) without mutating the base. """

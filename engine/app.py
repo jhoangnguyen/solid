@@ -1,6 +1,6 @@
 import pygame
 from dataclasses import dataclass
-from engine.ui.style import Theme, StyleContext, compute_centered_rect
+from engine.ui.style import Theme, StyleContext, compute_centered_rect, WaitIndicatorStyle
 from engine.ui.widgets.textbox import TextBox, RevealParams
 from engine.ui.anim import Animator, Tween
 from engine.settings import load_settings, AppCfg
@@ -15,7 +15,15 @@ class GameApp:
         self.running = True
 
         self.anim = Animator()
-        self.theme = Theme()
+        theme = Theme()
+        theme.wait_indicator = WaitIndicatorStyle(
+            char="\u25BC",
+            font_path="game/assets/fonts/NotoSansSymbols2-Regular.ttf",
+            color=(255, 255, 255),
+            period=1.0,
+            offset_x=6, offset_y=1, scale=0.5
+        )
+        self.theme = theme
 
         # textbox
         tb_rect = compute_centered_rect(self.screen, cfg.textbox.width_frac, cfg.textbox.height_frac)
