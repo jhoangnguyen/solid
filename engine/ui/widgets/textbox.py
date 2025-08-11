@@ -99,16 +99,14 @@ class TextBox:
         "theme",
         "font",
         "scroll_y",
-        "_cache_wrap_w",
-        "_cache_surfaces",
+        "opacity",
         "_content_h",
         "_text",
-        "opacity",
         "_wrap_w",
         "_entries_visible",
         "_entries_pending",
         "_release_timer",
-        "_reveal_params"
+        "_reveal_params",
     )
 
     def __init__(self, rect: pygame.Rect, theme: Theme, reveal: Optional[RevealParams]=None):
@@ -119,17 +117,10 @@ class TextBox:
         # scrolling (in pixels)
         self.scroll_y: float = 0.0
 
-        # render cache
-        self._cache_wrap_w: int = -1
-        self._cache_surfaces: List[pygame.Surface] = []
-        self._content_h: int = 0
-
-        # content
-        self._text: str = ""
-
         # effects
         self.opacity: float = 1.0
         
+        # Layout
         self._wrap_w: int = -1
         self._entries_visible: List[_Entry] = []
         self._entries_pending: Deque[_Entry] = deque()
@@ -199,7 +190,6 @@ class TextBox:
     def set_theme(self, theme: Theme) -> None:
         """Swap to a new theme (colors/font/spacing)."""
         self.theme = theme
-        # self._invalidate_layout(rebuild_font=True)
         self.font = pygame.font.Font(theme.font_path, theme.font_size)
         self._wrap_w = -1   # Force relayout
         
@@ -321,11 +311,7 @@ class TextBox:
         pygame.draw.rect(layer, th.box_border, full, width=1, border_radius=th.border_radius)
 
         # Inner viewport (relative to layer)
-        t, r, b, l = th.padding
-        sb = th.scrollbar
-        reserve_w = max(0, sb.width + sb.margin)
-        # viewport = pygame.Rect(l, t, max(0, self.rect.w - (l + r)), max(0, self.rect.h - (t + b)))
-        viewport = pygame.Rect(l, t, max(0, self.rect.w - (l + r + reserve_w)), max(0, self.rect.h - (t + b)))
+        viewport = self._viewport_rect()
 
         # Ensure we have layout for current width
         self._ensure_layout(viewport.width)
@@ -380,15 +366,10 @@ class TextBox:
     
     def _recalc_content_height(self) -> None:
         total = 0
-        first = True
         for idx, e in enumerate(self._entries_visible):
-            if not first:
-                # Line gap already included in entry heights per line, so no extra between entries
-                pass
             total += e.height
             if idx < len(self._entries_visible) - 1:
                 total += self.theme.entry_gap
-            first = False
         self._content_h = total
         # Clamp scroll if content shrank
         self.scroll_y = min(self.scroll_y, self.max_scroll())
@@ -412,7 +393,7 @@ class TextBox:
         if rebuild_font:
             # rebuild font for new size / path
             self.font = pygame.font.Font(self.theme.font_path, self.theme.font_size)
-        self._cache_wrap_w = -1  # force rebuild at next draw
+        self._wrap_w = -1  # force rebuild at next draw
 
     def _ensure_layout(self, wrap_w: int) -> None:
         """(Re)build wrapped line surfaces if width or content changed."""
@@ -543,3 +524,7 @@ class TextBox:
         sb = self.theme.scrollbar
         reserve_w = max(0, sb.width + sb.margin)
         return max(0, self.rect.w - (l + r + reserve_w))
+    
+    def _viewport_rect(self) -> pygame.Rect:
+        t, r, b, l = self.theme.padding
+        return pygame.Rect(l, t, self._viewport_width(), max(0, self.rect.h - (t + b)))

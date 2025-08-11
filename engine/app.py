@@ -31,7 +31,7 @@ class GameApp:
             "This line should also fade/slide in subtly."
         )
         for i in range(0, 100): 
-            self.textbox.append_line("Auto line " + str(i), wait_for_input= True)
+            self.textbox.append_line("Auto line " + str(i), wait_for_input = True)
 
         self.hud_font = pygame.font.Font(None, 24)
     
