@@ -1,5 +1,21 @@
-width: 1280
-height: 720
-title: Solid
-bg_rgb: [14, 15, 18]
 fps: 60
+
+window:
+  width: 1280
+  height: 720
+  title: HORIZON
+  bg_rgb: [14, 15, 18]
+
+ui:
+  textbox:
+    width_frac: 0.35    # width = 30% of window
+    height_frac: 0.8   # height = 80% of window
+    reveal:
+      per_line_delay: 0.15
+      intro_duration: 0.18
+      intro_offset_px: 10
+      stick_to_bottom_threshold_px: 30
+
+input:
+  scroll_wheel_pixels: 40
+  page_scroll_frac: 0.9
