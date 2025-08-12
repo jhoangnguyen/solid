@@ -2,6 +2,7 @@ from __future__ import annotations
 from typing import List, Tuple
 import pygame
 
+
 def _ease_out_cubic(t: float) -> float:
     t = 0.0 if t < 0.0 else 1.0 if t > 1.0 else t
     return 1 - (1 - t) ** 3
@@ -83,12 +84,13 @@ class ChoiceBox:
                     lines: List[str],
                     theme,
                     y_top: int,
-                    point_widget_coords: Tuple[int, int]) -> Optional[int]:
+                    point_widget_coords: Tuple[int, int],
+                    strict_text_x: bool = False) -> int | None:
         """ Return index of line under the mouse, or None. """
         if not lines:
             return None
         inset = getattr(theme, "choice_inset_px", 12)
-        pad_t, pad_r, pad_b, pad_l_ = getattr(theme, "choice_padding", _scale_padding(theme.padding, 0.6))
+        pad_t, pad_r, pad_b, pad_l = getattr(theme, "choice_padding", _scale_padding(theme.padding, 0.6))
         font = pygame.font.Font(theme.font_path, theme.font_size)
         ls = theme.line_spacing
         
@@ -96,16 +98,30 @@ class ChoiceBox:
         box_w = max(0, viewport.w - inset * 2)
         xw, yw = point_widget_coords
         if xw < box_x or xw > box_x + box_w:
-            return None
+            # Needs to strictly be hovering the text
+            if not strict_text_x:
+                return None
         y_local = yw - y_top - pad_t
         if y_local < 0:
             return None
         
         y = 0
         for i, line in enumerate(lines):
-            h = font.render(line or "", True, (0, 0, 0)).get_height()
-            row_h = h + (ls if i < len(lines) - 1 else 0)
+        # measure current row
+            text_w, text_h = font.size(line or "")
+            row_h = text_h + (ls if i < len(lines) - 1 else 0)
+
+            # vertical row bounds
             if y <= y_local < y + row_h:
-                return i
+                if strict_text_x:
+                    x0 = box_x + pad_l
+                    x1 = x0 + text_w
+                    if x0 <= xw <= x1:
+                        return i
+                    return None
+                else:
+                    return i
+
             y += row_h
+
         return None

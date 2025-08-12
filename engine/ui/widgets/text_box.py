@@ -9,6 +9,7 @@ from engine.ui.text_view import TextView
 from engine.ui.scroll_bar import Scrollbar
 from engine.ui.widgets.choice_box import ChoiceBox
 from engine.ui.scroll_model import ScrollModel
+from engine.ui.choice_controller import ChoiceController
 
 class TextBox:
     """
@@ -26,12 +27,7 @@ class TextBox:
         "scroller", 
         "model", 
         "view", 
-        "_choice_lines", 
-        "_choice_anim_t", 
-        "_choice_anim_dur",
-        "_choice_anchor_bottom",
-        "_choice_selected_idx",
-        "_choice_hover_idx",
+        "choices",
         "_follow_bottom",
         )
 
@@ -52,14 +48,9 @@ class TextBox:
 
         self.model = TextModel(reveal)
         self.view = TextView(theme)
-        self.scroller = ScrollModel(content_h=0, viewport_h=self.view, offset=0.0)
+        self.scroller = ScrollModel(content_h=0, viewport_h=self.viewport_height, offset=0.0)
 
-        self._choice_lines = None
-        self._choice_anim_t = 0.0
-        self._choice_anim_dur = 0.18
-        self._choice_anchor_bottom = False
-        self._choice_selected_idx = -1
-        self._choice_hover_idx = -1
+        self.choices = ChoiceController()
         self._follow_bottom = True
 
     # ---------- authoring ----------
@@ -123,13 +114,11 @@ class TextBox:
         if (flags.get("released") or flags.get("animating")) and (self._follow_bottom or self._near_bottom()):
             self.scroller.to_bottom()
         # Tick overlay
-        if self._choice_lines is not None and self._choice_anim_t < self._choice_anim_dur:
-            self._choice_anim_t = min(self._choice_anim_dur, self._choice_anim_t + dt)
-            # if we were at bottom when the panel appeared, keep anchoring during its growth
-            if self._choice_anchor_bottom or self._follow_bottom:
+        if self.choices.active():
+            prev = self.choices.anim_t
+            self.choices.tick(dt)
+            if (self.choices.anchor_bottom or self._follow_bottom) and self.choices.anim_t > prev:
                 self.scroller.to_bottom()
-        elif self._choice_lines is not None:
-            self._choice_anchor_bottom = False
 
     def on_player_press(self) -> None:
         """ Function to scroll on player mouse click or pressing a key. """
@@ -144,57 +133,83 @@ class TextBox:
     def show_choice_box(self, lines: list[str]) -> None:
         """ Show a choices overlay (renders inside the textbox viewport). """
         was_bottom = self._near_bottom()
-        
-        self._choice_lines = list(lines or [])
-        self._choice_anim_t = 0.0
-        self._choice_anchor_bottom = was_bottom
-        self._choice_selected_idx = 0 if self._choice_lines else -1 # Keyboard-ready
-        self._choice_hover_idx = -1
-        
-        if was_bottom:
-            self.scroller.to_bottom()
+        self.choices.show(lines, anchor_bottom=was_bottom)
+        if was_bottom: self.scroller.to_bottom()
         
     def hide_choice_box(self) -> None:
         """ Hide the choices overlay. """
-        self._choice_lines = None
-        self._choice_anim_t = 0.0
-        self._choice_anchor_bottom = False
-        self._choice_selected_idx = -1
-        self._choice_hover_idx = -1
+        self.choices.hide()
     
     # ---------- presenter ------------
     def choice_active(self) -> bool:
-        return bool(self._choice_lines)
+        return self.choices.active()
     
     def choice_move_cursor(self, delta: int) -> None:
-        if not self._choice_lines:
-            return
-        n = len(self._choice_lines)
-        self._choice_selected_idx = (self._choice_selected_idx + delta) % n
+        self.choices.move(delta)
         
     def choice_get_selected_index(self) -> int:
-        return self._choice_selected_idx
+        return self.choices.sel
     
     def _choice_y_flow(self, viewport: pygame.Rect) -> int:
         return (viewport.y - int(round(self.scroller.offset)) + self.view.content_height(self.model.visible_entries) + self.model.last_entry_anim_offset() + max(self.theme.entry_gap, self.theme.line_spacing))
     
     def choice_hover_at(self, window_pos: tuple[int, int]) -> None:
-        if not self._choice_lines:
+        if not self.choices.active():
             return
+
         vx, vy = window_pos
-        # Convert to widget-layer coords
         wx = vx - self.rect.x
         wy = vy - self.rect.y
         viewport = self.view.viewport_rect(self.rect)
+
+        # Base flow Y (same as draw)
         y_flow = self._choice_y_flow(viewport)
-        idx = ChoiceBox.hit_test(viewport, self._choice_lines, self.theme, y_flow, (wx, wy))
-        self._choice_hover_idx = (-1 if idx is None else idx)
-        if idx is not None:
-            self._choice_selected_idx = idx # Hover also selects for underline
-            
+        
+        # Slide offset used in ChoiceBox.draw_flow (8px -> 0px)
+        u = 1.0 if self.choices.anim_dur <= 0 else min(1.0, self.choices.anim_t / self.choices.anim_dur)
+        slide_offset = int((1.0 - u) * 8)
+        y_effective = y_flow - slide_offset
+
+        # Hover: row-wide is friendlier (strict_text_x=False)
+        idx = ChoiceBox.hit_test(
+            viewport=viewport,
+            lines=self.choices.lines,
+            theme=self.theme,
+            y_top=y_effective,
+            point_widget_coords=(wx, wy),
+            strict_text_x=False,
+        )
+        # Apply hover -> also sets selection for underline
+        self.choices.set_hover_index(idx)
+    
     def choice_click(self, window_pos: tuple[int, int]) -> int | None:
-        self.choice_hover_at(window_pos)
-        return self._choice_selected_idx if self._choice_selected_idx >= 0 else None
+        if not self.choices.active():
+            return None
+
+        vx, vy = window_pos
+        wx = vx - self.rect.x
+        wy = vy - self.rect.y
+        viewport = self.view.viewport_rect(self.rect)
+
+        y_flow = self._choice_y_flow(viewport)
+
+        u = 1.0 if self.choices.anim_dur <= 0 else min(1.0, self.choices.anim_t / self.choices.anim_dur)
+        slide_offset = int((1.0 - u) * 8)
+        y_effective = y_flow - slide_offset
+
+        # Click: require pointer over actual text
+        idx = ChoiceBox.hit_test(
+            viewport=viewport,
+            lines=self.choices.lines,
+            theme=self.theme,
+            y_top=y_effective,
+            point_widget_coords=(wx, wy),
+            strict_text_x=True,
+        )
+        if idx is None:
+            return None
+        self.choices.set_hover_index(idx)  # sync selection to clicked row
+        return idx
 
     # ---------- scrolling ----------
     def scroll(self, dy: float) -> None:
@@ -265,18 +280,19 @@ class TextBox:
             self.theme,
         )
         
-        if self._choice_lines:
+        # if self._choice_lines:
+        if self.choices.active():
             viewport = self.view.viewport_rect(self.rect)
             y_flow = viewport.y - int(round(self.scroller.offset)) + self.view.content_height(entries) + self.model.last_entry_anim_offset() + self._choice_gap_above()
             ChoiceBox.draw_flow(
                 layer=layer,
                 viewport=viewport,
-                lines=self._choice_lines,
+                lines=self.choices.lines,
                 theme=self.theme,
                 y_top=y_flow,
-                anim_t=self._choice_anim_t,
-                anim_duration=self._choice_anim_dur,
-                selected_idx=self._choice_selected_idx
+                anim_t=self.choices.anim_t,
+                anim_duration=self.choices.anim_dur,
+                selected_idx=self.choices.sel
             )
 
         # widget opacity
@@ -294,9 +310,9 @@ class TextBox:
     def _visual_content_height(self) -> int:
         # content height from view + any remaining animation offset on last line
         h = self.view.content_height(self.model.visible_entries) + self.model.last_entry_anim_offset()
-        if self._choice_lines:
+        if self.choices.active():
             viewport = self.view.viewport_rect(self.rect)
-            h += self._choice_gap_above() + ChoiceBox.calc_height(viewport, self._choice_lines, self.theme)
+            h += self._choice_gap_above() + ChoiceBox.calc_height(viewport, self.choices.lines, self.theme)
         return h
     
     def _choice_gap_above(self) -> int:
