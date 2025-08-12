@@ -27,9 +27,10 @@ class TextView:
     - draw the wait-for-input indicator
     - compute content height (inc. Theme.entry_gap)
     """
-    def __init__(self, theme: Theme):
+    def __init__(self, theme: Theme, fonts):
         self.theme = theme
-        self.font = pygame.font.Font(theme.font_path, theme.font_size)
+        self.fonts = fonts
+        self.font = self.fonts.get(theme.font_path, theme.font_size)
         self._wrap_w: int = -1
         self._cache: Dict[Entry, _Layout] = {}
         self._blink_t: float = 0.0  # for wait-indicator
@@ -37,28 +38,38 @@ class TextView:
     # --------- public ---------
     def set_theme(self, theme: Theme) -> None:
         self.theme = theme
-        self.font = pygame.font.Font(theme.font_path, theme.font_size)
         self.invalidate_layout()
 
     def update(self, dt: float) -> None:
         self._blink_t += dt
 
-    def invalidate_layout(self) -> None:
-        self._wrap_w = -1
-        self._cache.clear()
-
     def ensure_layout(self, wrap_w: int, entries: List[Entry]) -> None:
+        """
+        Make sure we have wrapped+rendered layouts for all `entries` at `wrap_w`.
+        If width changed, rewrap everything we see; otherwise only build missing ones.
+        """
         if wrap_w <= 0:
             self._wrap_w = wrap_w
             self._cache.clear()
             return
-        if wrap_w == self._wrap_w:
-            return
-        self.font = pygame.font.Font(self.theme.font_path, self.theme.font_size)
-        self._wrap_w = wrap_w
-        self._cache.clear()
-        for e in entries:
-            self._cache[e] = self._layout_entry(e, wrap_w)
+
+        # Always grab the font via FontCache (in case theme changed)
+        self.font = self.fonts.get(self.theme.font_path, self.theme.font_size)
+
+        if wrap_w != self._wrap_w:
+            # Width changed -> rewrap/re-render the entries we were asked about.
+            self._wrap_w = wrap_w
+            self._cache.clear()
+            for e in entries:
+                self._cache[e] = self._layout_entry(e, wrap_w)
+        else:
+            # Width unchanged -> add any new entries that aren't cached yet.
+            for e in entries:
+                if e not in self._cache:
+                    self._cache[e] = self._layout_entry(e, wrap_w)
+                    stale = [k for k in self._cache.keys() if k not in entries]
+                    for k in stale: self._cache.pop(k, None)
+
 
     def content_height(self, entries: List[Entry]) -> int:
         if not entries:

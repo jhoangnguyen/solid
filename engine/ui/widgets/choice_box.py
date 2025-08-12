@@ -1,5 +1,6 @@
 from __future__ import annotations
 from typing import List, Tuple
+from engine.ui.style import Theme
 import pygame
 
 
@@ -16,12 +17,12 @@ class ChoiceBox:
     Stateless renderer for a compact choice panel inside a textbox viewport.
     Draws a rounded rect and the provided choice lines.
     """
-    def calc_height(viewport: pygame.Rect, lines: list[str], theme) -> int:
+    def calc_height(viewport: pygame.Rect, lines: list[str], theme: Theme, fonts) -> int:
         inset = getattr(theme, "choice_inset_px", 12)
         pad_t, pad_r, pad_b, pad_l = getattr(
             theme, "choice_padding", _scale_padding(theme.padding, 0.6)
         )
-        font = pygame.font.Font(theme.font_path, theme.font_size)
+        font = fonts.get(theme.font_path, theme.font_size)
         line_h = [font.render(s, True, theme.text_rgb).get_height() for s in (lines or [])]
         text_h = sum(line_h) + max(0, len(line_h)-1) * theme.line_spacing
         return text_h + pad_t + pad_b  # unclamped; let viewport clip
@@ -31,18 +32,20 @@ class ChoiceBox:
                   viewport: pygame.Rect,
                   lines: list[str],
                   theme,
+                  fonts,
                   y_top: int,
                   anim_t: float,
                   anim_duration: float = 0.18,
                   selected_idx: int = -1) -> None:
         if not lines:
             return
+        
         inset = getattr(theme, "choice_inset_px", 12)
         pad_t, pad_r, pad_b, pad_l = getattr(
             theme, "choice_padding", _scale_padding(theme.padding, 0.6)
         )
         radius = max(4, getattr(theme, "border_radius", 12) - 4)
-        font = pygame.font.Font(theme.font_path, theme.font_size)
+        font = fonts.get(theme.font_path, theme.font_size)
         color = theme.text_rgb
         ls = theme.line_spacing
 
@@ -83,6 +86,7 @@ class ChoiceBox:
     def hit_test(viewport: pygame.Rect,
                     lines: List[str],
                     theme,
+                    fonts,
                     y_top: int,
                     point_widget_coords: Tuple[int, int],
                     strict_text_x: bool = False) -> int | None:
@@ -91,7 +95,7 @@ class ChoiceBox:
             return None
         inset = getattr(theme, "choice_inset_px", 12)
         pad_t, pad_r, pad_b, pad_l = getattr(theme, "choice_padding", _scale_padding(theme.padding, 0.6))
-        font = pygame.font.Font(theme.font_path, theme.font_size)
+        font = fonts.get(theme.font_path, theme.font_size)
         ls = theme.line_spacing
         
         box_x = viewport.x + inset

@@ -10,6 +10,7 @@ from engine.ui.scroll_bar import Scrollbar
 from engine.ui.widgets.choice_box import ChoiceBox
 from engine.ui.scroll_model import ScrollModel
 from engine.ui.choice_controller import ChoiceController
+from engine.ui.fonts import FontCache
 
 class TextBox:
     """
@@ -28,6 +29,7 @@ class TextBox:
         "model", 
         "view", 
         "choices",
+        "fonts",
         "_follow_bottom",
         )
 
@@ -47,7 +49,8 @@ class TextBox:
         self.opacity: float = 1.0
 
         self.model = TextModel(reveal)
-        self.view = TextView(theme)
+        self.fonts = FontCache()
+        self.view = TextView(theme, self.fonts)
         self.scroller = ScrollModel(content_h=0, viewport_h=self.viewport_height, offset=0.0)
 
         self.choices = ChoiceController()
@@ -175,6 +178,7 @@ class TextBox:
             viewport=viewport,
             lines=self.choices.lines,
             theme=self.theme,
+            fonts=self.fonts,
             y_top=y_effective,
             point_widget_coords=(wx, wy),
             strict_text_x=False,
@@ -202,6 +206,7 @@ class TextBox:
             viewport=viewport,
             lines=self.choices.lines,
             theme=self.theme,
+            fonts=self.fonts,
             y_top=y_effective,
             point_widget_coords=(wx, wy),
             strict_text_x=True,
@@ -289,6 +294,7 @@ class TextBox:
                 viewport=viewport,
                 lines=self.choices.lines,
                 theme=self.theme,
+                fonts=self.fonts,
                 y_top=y_flow,
                 anim_t=self.choices.anim_t,
                 anim_duration=self.choices.anim_dur,
@@ -312,7 +318,7 @@ class TextBox:
         h = self.view.content_height(self.model.visible_entries) + self.model.last_entry_anim_offset()
         if self.choices.active():
             viewport = self.view.viewport_rect(self.rect)
-            h += self._choice_gap_above() + ChoiceBox.calc_height(viewport, self.choices.lines, self.theme)
+            h += self._choice_gap_above() + ChoiceBox.calc_height(viewport, self.choices.lines, self.theme, self.fonts)
         return h
     
     def _choice_gap_above(self) -> int:
