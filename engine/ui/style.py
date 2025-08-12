@@ -10,6 +10,7 @@ class ScrollbarStyle:
     show_when_no_overflow: bool = True
     track_color: tuple[int, int, int, int] = (255, 255, 255, 32)
     thumb_color: tuple[int, int, int, int] = (255, 255, 255, 192)
+    offset_x: int = 15
     def derive(self, **overrides): return replace(self, **overrides)
 
 @dataclass

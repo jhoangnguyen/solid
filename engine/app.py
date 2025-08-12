@@ -1,9 +1,11 @@
 import pygame
 from dataclasses import dataclass
 from engine.ui.style import Theme, StyleContext, compute_centered_rect, WaitIndicatorStyle
-from engine.ui.widgets.textbox import TextBox, RevealParams
+from engine.ui.widgets.text_box import TextBox, RevealParams
 from engine.ui.anim import Animator, Tween
 from engine.settings import load_settings, AppCfg
+from engine.narrative.loader import load_story_file
+from engine.narrative.presenter import NodePresenter
 
 class GameApp:
     def __init__(self, cfg: AppCfg):
@@ -33,33 +35,88 @@ class GameApp:
             intro_offset_px=cfg.reveal.intro_offset_px,
             stick_to_bottom_threshold_px=cfg.reveal.stick_to_bottom_threshold_px,
         ))
-        self.textbox.queue_lines(
-            "You found it. The last message.\n"
-            "Keep scrolling. There’s more below.\n"
-            "This line should also fade/slide in subtly."
-        )
-        for i in range(0, 100): 
-            self.textbox.append_line("Auto line " + str(i), wait_for_input = True)
-
+        
+        # --- load YAML ---
+        story_path = "game/content/prologue.yaml"
+        self.story = load_story_file(story_path)
+        self.current_node_id = self.story.start
+        
+        self.presenter = NodePresenter(self.textbox, self.story)
+        self.presenter.show_node(self.story.nodes[self.current_node_id])
+        
         self.hud_font = pygame.font.Font(None, 24)
     
+    # def handle_input(self):
+    #     for e in pygame.event.get():
+    #         if e.type == pygame.QUIT: 
+    #             self.running = False
+    #         elif e.type == pygame.KEYDOWN:
+    #             if e.key == pygame.K_ESCAPE: 
+    #                 self.running = False
+    #             elif e.key in (pygame.K_SPACE, pygame.K_RETURN):
+    #                 self.textbox.on_player_press()
+    #             elif e.key == pygame.K_PAGEUP:
+    #                 self.textbox.scroll(-self.textbox.viewport_height * self.cfg.input.page_scroll_frac)
+    #             elif e.key == pygame.K_PAGEDOWN:
+    #                 self.textbox.scroll(+self.textbox.viewport_height * self.cfg.input.page_scroll_frac)
+    #             elif e.key == pygame.K_HOME: self.textbox.scroll_to_top()
+    #             elif e.key == pygame.K_END: self.textbox.scroll_to_bottom()
+    #         elif e.type == pygame.MOUSEBUTTONDOWN and e.button == 1:
+    #             self.textbox.on_player_press()
+    #         elif e.type == pygame.MOUSEWHEEL:
+    #             self.textbox.scroll(-e.y * self.cfg.input.scroll_wheel_pixels)
+    #         elif e.type == pygame.VIDEORESIZE:
+    #             self.screen = pygame.display.set_mode((e.w, e.h), pygame.RESIZABLE)
+    #             self.textbox.on_resize(compute_centered_rect(self.screen, self.cfg.textbox.width_frac, self.cfg.textbox.height_frac))
     def handle_input(self):
         for e in pygame.event.get():
-            if e.type == pygame.QUIT: 
+            if e.type == pygame.QUIT:
                 self.running = False
             elif e.type == pygame.KEYDOWN:
-                if e.key == pygame.K_ESCAPE: 
+                if e.key == pygame.K_ESCAPE:
                     self.running = False
-                elif e.key in (pygame.K_SPACE, pygame.K_RETURN):
-                    self.textbox.on_player_press()
-                elif e.key == pygame.K_PAGEUP:
-                    self.textbox.scroll(-self.textbox.viewport_height * self.cfg.input.page_scroll_frac)
-                elif e.key == pygame.K_PAGEDOWN:
-                    self.textbox.scroll(+self.textbox.viewport_height * self.cfg.input.page_scroll_frac)
-                elif e.key == pygame.K_HOME: self.textbox.scroll_to_top()
-                elif e.key == pygame.K_END: self.textbox.scroll_to_bottom()
+                elif self.textbox.choice_active():
+                    if e.key == pygame.K_UP:
+                        self.textbox.choice_move_cursor(-1)
+                    elif e.key == pygame.K_DOWN:
+                        self.textbox.choice_move_cursor(+1)
+                    elif e.key in (pygame.K_RETURN, pygame.K_SPACE):
+                        idx = self.textbox.choice_get_selected_index()
+                        if idx is not None and idx >= 0:
+                            self.presenter.submit_choice_index(idx)
+                    elif e.key == pygame.K_PAGEUP:
+                        self.textbox.scroll(-self.textbox.viewport_height * self.cfg.input.page_scroll_frac)
+                    elif e.key == pygame.K_PAGEDOWN:
+                        self.textbox.scroll(+self.textbox.viewport_height * self.cfg.input.page_scroll_frac)
+                    elif e.key == pygame.K_HOME:
+                        self.textbox.scroll_to_top()
+                    elif e.key == pygame.K_END:
+                        self.textbox.scroll_to_bottom()
+                else:
+                    # no active choice panel -> normal VN advance controls
+                    if e.key in (pygame.K_SPACE, pygame.K_RETURN):
+                        self.textbox.on_player_press()
+                    elif e.key == pygame.K_PAGEUP:
+                        self.textbox.scroll(-self.textbox.viewport_height * self.cfg.input.page_scroll_frac)
+                    elif e.key == pygame.K_PAGEDOWN:
+                        self.textbox.scroll(+self.textbox.viewport_height * self.cfg.input.page_scroll_frac)
+                    elif e.key == pygame.K_HOME:
+                        self.textbox.scroll_to_top()
+                    elif e.key == pygame.K_END:
+                        self.textbox.scroll_to_bottom()
+
+            elif e.type == pygame.MOUSEMOTION:
+                if self.textbox.choice_active():
+                    self.textbox.choice_hover_at(e.pos)
+
             elif e.type == pygame.MOUSEBUTTONDOWN and e.button == 1:
-                self.textbox.on_player_press()
+                if self.textbox.choice_active():
+                    idx = self.textbox.choice_click(e.pos)
+                    if idx is not None:
+                        self.presenter.submit_choice_index(idx)
+                else:
+                    self.textbox.on_player_press()
+
             elif e.type == pygame.MOUSEWHEEL:
                 self.textbox.scroll(-e.y * self.cfg.input.scroll_wheel_pixels)
             elif e.type == pygame.VIDEORESIZE:
@@ -67,7 +124,8 @@ class GameApp:
                 self.textbox.on_resize(compute_centered_rect(self.screen, self.cfg.textbox.width_frac, self.cfg.textbox.height_frac))
                 
     def update(self, dt: float):
-        # Function to run on delta time to update game state. Will be blank for now.
+        # Function to run on delta time to update game state. 
+        self.presenter.update(dt)
         self.textbox.update(dt)
         # pass
     

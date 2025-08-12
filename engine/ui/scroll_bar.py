@@ -12,7 +12,7 @@ class Scrollbar:
              visual_content_h: int, scroll_y: float, max_scroll: float, theme: Theme) -> None:
         sb = theme.scrollbar
         t, r, b, l = theme.padding
-        track_x = widget_rect.w - r - sb.margin - sb.width
+        track_x = widget_rect.w - r - sb.margin - sb.width + sb.offset_x
         track_y = t
         track_h = widget_rect.h - (t + b)
         if track_h <= 0 or sb.width <= 0:
