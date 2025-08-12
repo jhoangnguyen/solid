@@ -45,29 +45,7 @@ class GameApp:
         self.presenter.show_node(self.story.nodes[self.current_node_id])
         
         self.hud_font = pygame.font.Font(None, 24)
-    
-    # def handle_input(self):
-    #     for e in pygame.event.get():
-    #         if e.type == pygame.QUIT: 
-    #             self.running = False
-    #         elif e.type == pygame.KEYDOWN:
-    #             if e.key == pygame.K_ESCAPE: 
-    #                 self.running = False
-    #             elif e.key in (pygame.K_SPACE, pygame.K_RETURN):
-    #                 self.textbox.on_player_press()
-    #             elif e.key == pygame.K_PAGEUP:
-    #                 self.textbox.scroll(-self.textbox.viewport_height * self.cfg.input.page_scroll_frac)
-    #             elif e.key == pygame.K_PAGEDOWN:
-    #                 self.textbox.scroll(+self.textbox.viewport_height * self.cfg.input.page_scroll_frac)
-    #             elif e.key == pygame.K_HOME: self.textbox.scroll_to_top()
-    #             elif e.key == pygame.K_END: self.textbox.scroll_to_bottom()
-    #         elif e.type == pygame.MOUSEBUTTONDOWN and e.button == 1:
-    #             self.textbox.on_player_press()
-    #         elif e.type == pygame.MOUSEWHEEL:
-    #             self.textbox.scroll(-e.y * self.cfg.input.scroll_wheel_pixels)
-    #         elif e.type == pygame.VIDEORESIZE:
-    #             self.screen = pygame.display.set_mode((e.w, e.h), pygame.RESIZABLE)
-    #             self.textbox.on_resize(compute_centered_rect(self.screen, self.cfg.textbox.width_frac, self.cfg.textbox.height_frac))
+
     def handle_input(self):
         for e in pygame.event.get():
             if e.type == pygame.QUIT:

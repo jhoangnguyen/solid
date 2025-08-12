@@ -2,13 +2,13 @@ from __future__ import annotations
 
 from typing import Optional
 import pygame
-import math
 
 from engine.ui.style import Theme
 from engine.ui.text_model import TextModel, RevealParams
 from engine.ui.text_view import TextView
 from engine.ui.scroll_bar import Scrollbar
 from engine.ui.widgets.choice_box import ChoiceBox
+from engine.ui.scroll_model import ScrollModel
 
 class TextBox:
     """
@@ -22,8 +22,8 @@ class TextBox:
     __slots__ = (
         "rect", 
         "theme", 
-        "opacity", 
-        "scroll_y", 
+        "opacity",
+        "scroller", 
         "model", 
         "view", 
         "_choice_lines", 
@@ -49,11 +49,11 @@ class TextBox:
         self.rect = rect.copy()
         self.theme = theme
         self.opacity: float = 1.0
-        self.scroll_y: float = 0.0
 
         self.model = TextModel(reveal)
         self.view = TextView(theme)
-        
+        self.scroller = ScrollModel(content_h=0, viewport_h=self.view, offset=0.0)
+
         self._choice_lines = None
         self._choice_anim_t = 0.0
         self._choice_anim_dur = 0.18
@@ -70,7 +70,7 @@ class TextBox:
     def set_text(self, text: str) -> None:
         """ Sets text directly into the box. No animations. """
         self.model.set_text(text)
-        self.scroll_to_top()
+        self.scroller.to_top()
         
     def set_follow_bottom(self, on: bool) -> None:
         self._follow_bottom = bool(on)
@@ -84,29 +84,30 @@ class TextBox:
         self.model.append_line(line, animated, wait_for_input)
         # if adding immediately-visible content, keep anchored when near bottom
         if not (animated or wait_for_input) and self._near_bottom():
-            self.scroll_to_bottom()
+            self.scroller.to_bottom()
             
     def clear(self) -> None:
         """ Clears all queued dialogue and resets scroll. """
         self.model.clear()
-        self.scroll_y = 0.0
+        self.scroller.to_top()
 
     # ---------- lifecycle ----------
     def on_resize(self, new_rect: pygame.Rect) -> None:
         """ Adjusts all visible ratios for drawn rects and viewports to match the current resolution."""
         was_bottom = self._near_bottom()
-        old_max = max(1e-6, self.max_scroll())
-        ratio = self.scroll_y / old_max
+        old_max = max(1e-6, self.scroller.max())
+        ratio = self.scroller.offset / old_max
 
         self.rect = new_rect.copy()
         # force relayout now so scroll math is correct immediately
         viewport = self.view.viewport_rect(self.rect)
         self.view.ensure_layout(viewport.width, self.model.visible_entries)
 
+        self._sync_scroll_metrics()
         if was_bottom:
-            self.scroll_to_bottom()
+            self.scroller.to_bottom()
         else:
-            self.scroll_y = self.max_scroll() * ratio
+            self.scroller.offset = self.scroller.max() * ratio
 
     def set_theme(self, theme: Theme) -> None:
         """ Sets the theme of the textbox object. Also sets the theme of the text, if provided. """
@@ -117,27 +118,28 @@ class TextBox:
         """ Updates the current state of the text box based on delta line. Releases lines and autoscrolls. """
         flags = self.model.update(dt)
         self.view.update(dt)
+        self._sync_scroll_metrics()
         # keep anchored during slides if close to bottom
         if (flags.get("released") or flags.get("animating")) and (self._follow_bottom or self._near_bottom()):
-            self.scroll_to_bottom()
+            self.scroller.to_bottom()
         # Tick overlay
         if self._choice_lines is not None and self._choice_anim_t < self._choice_anim_dur:
             self._choice_anim_t = min(self._choice_anim_dur, self._choice_anim_t + dt)
             # if we were at bottom when the panel appeared, keep anchoring during its growth
             if self._choice_anchor_bottom or self._follow_bottom:
-                self.scroll_to_bottom()
+                self.scroller.to_bottom()
         elif self._choice_lines is not None:
             self._choice_anchor_bottom = False
 
     def on_player_press(self) -> None:
         """ Function to scroll on player mouse click or pressing a key. """
         if self.model.on_player_press() and (self._follow_bottom or self._near_bottom()):
-            self.scroll_to_bottom()
+            self.scroller.to_bottom()
 
     def advance_line_now(self) -> None:
         """ Advances the line immediately and autoscroll. """
         if self.model.advance_line_now() and (self._follow_bottom or self._near_bottom()):
-            self.scroll_to_bottom()
+            self.scroller.to_bottom()
             
     def show_choice_box(self, lines: list[str]) -> None:
         """ Show a choices overlay (renders inside the textbox viewport). """
@@ -150,7 +152,7 @@ class TextBox:
         self._choice_hover_idx = -1
         
         if was_bottom:
-            self.scroll_to_bottom()
+            self.scroller.to_bottom()
         
     def hide_choice_box(self) -> None:
         """ Hide the choices overlay. """
@@ -174,7 +176,7 @@ class TextBox:
         return self._choice_selected_idx
     
     def _choice_y_flow(self, viewport: pygame.Rect) -> int:
-        return (viewport.y - int(round(self.scroll_y)) + self.view.content_height(self.model.visible_entries) + self.model.last_entry_anim_offset() + max(self.theme.entry_gap, self.theme.line_spacing))
+        return (viewport.y - int(round(self.scroller.offset)) + self.view.content_height(self.model.visible_entries) + self.model.last_entry_anim_offset() + max(self.theme.entry_gap, self.theme.line_spacing))
     
     def choice_hover_at(self, window_pos: tuple[int, int]) -> None:
         if not self._choice_lines:
@@ -197,24 +199,34 @@ class TextBox:
     # ---------- scrolling ----------
     def scroll(self, dy: float) -> None:
         """ Scrolls the textbox by a delta y amount. Blocks any negatives values. """
-        if dy == 0:
-            return
+        if dy == 0: return
         prev_bottom = self.is_at_bottom
-        self.scroll_y = max(0.0, min(self.max_scroll(), self.scroll_y + dy))
+        self.scroller.scroll(dy)
         if not self.is_at_bottom and not prev_bottom:
             self._follow_bottom = False
+        if self.is_at_bottom:
+            self._follow_bottom = True # Optional
 
     def max_scroll(self) -> float:
         """ Scrolls the textbox to the bottom of the visible content. """
-        return max(0.0, float(math.ceil(self._visual_content_height() - self.viewport_height)))
+        self._sync_scroll_metrics()
+        return self.scroller.max()
 
     def scroll_to_top(self) -> None:
-        self.scroll_y = 0.0
+        self.scroller.to_top()
+        self._follow_bottom = False
 
     def scroll_to_bottom(self) -> None:
-        self.scroll_y = self.max_scroll()
+        self._sync_scroll_metrics()
+        self.scroller.to_bottom()
         self._follow_bottom = True
-
+        
+    def _sync_scroll_metrics(self) -> None:
+        """ Update ScrollModel content/viewport from current layout. """
+        self.scroller.viewport_h = self.viewport_height
+        self.scroller.content_h = int(self._visual_content_height())
+        self.scroller.clamp()
+                
     # ---------- properties ----------
     @property
     def viewport_height(self) -> int:
@@ -223,11 +235,11 @@ class TextBox:
 
     @property
     def is_at_top(self) -> bool:
-        return self.scroll_y <= 1e-3
+        return self.scroller.offset <= 1e-3
 
     @property
     def is_at_bottom(self) -> bool:
-        return self.scroll_y >= self.max_scroll() - 1e-3
+        return (self.scroller.max() - self.scroller.offset) <= 1e-3
 
     # ---------- drawing ----------
     def draw(self, surface: pygame.Surface) -> None:
@@ -240,7 +252,7 @@ class TextBox:
         viewport = self.view.viewport_rect(self.rect)
 
         # draw background + text
-        self.view.draw_into(layer, self.rect, entries, self.scroll_y)
+        self.view.draw_into(layer, self.rect, entries, self.scroller.offset)
 
         # draw scrollbar
         Scrollbar.draw(
@@ -248,14 +260,14 @@ class TextBox:
             self.rect,
             viewport,
             self._visual_content_height(),
-            self.scroll_y,
-            self.max_scroll(),
+            self.scroller.offset,
+            self.scroller.max(),
             self.theme,
         )
         
         if self._choice_lines:
             viewport = self.view.viewport_rect(self.rect)
-            y_flow = viewport.y - int(round(self.scroll_y)) + self.view.content_height(entries) + self.model.last_entry_anim_offset() + self._choice_gap_above()
+            y_flow = viewport.y - int(round(self.scroller.offset)) + self.view.content_height(entries) + self.model.last_entry_anim_offset() + self._choice_gap_above()
             ChoiceBox.draw_flow(
                 layer=layer,
                 viewport=viewport,
@@ -276,16 +288,14 @@ class TextBox:
     # ---------- helpers ----------
     def _near_bottom(self) -> bool:
         px = getattr(self.model.reveal, "stick_to_bottom_threshold_px", 24)
-        return (self.max_scroll() - self.scroll_y) <= max(0, px)
+        self._sync_scroll_metrics()
+        return (self.max_scroll() - self.scroller.offset) <= max(0, px)
 
     def _visual_content_height(self) -> int:
         # content height from view + any remaining animation offset on last line
-        # return self.view.content_height(self.model.visible_entries) + self.model.last_entry_anim_offset()
         h = self.view.content_height(self.model.visible_entries) + self.model.last_entry_anim_offset()
         if self._choice_lines:
             viewport = self.view.viewport_rect(self.rect)
-            # y_flow = self._choice_y_flow(viewport)
-            # ChoiceBox.draw_flow(layer, viewport, self._choice_lines, self.theme, y_flow, self._choice_anim_t, self._choice_anim_dur, selected_idx=self._choice_selected_idx)
             h += self._choice_gap_above() + ChoiceBox.calc_height(viewport, self._choice_lines, self.theme)
         return h
     
