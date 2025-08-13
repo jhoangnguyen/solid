@@ -60,7 +60,7 @@ class ImageBrush:
         
         # Prepare a target surface exactly the size of the inner rect
         # we'll clip the image to rounded corners here
-        target = pygame.Surface((inner.w, inner.h), pygame.SRCALPHA)
+        # target = pygame.Surface((inner.w, inner.h), pygame.SRCALPHA)
         
         # Build the image content on `content`
         content = self._build_content((inner.w, inner.h)).copy()

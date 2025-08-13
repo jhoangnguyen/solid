@@ -1,6 +1,8 @@
+from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Dict, Tuple, Optional
+from engine.ui.style import Theme, WaitIndicatorStyle
 
 try:
     import yaml
@@ -79,3 +81,75 @@ def load_settings(path: str = "game/config/defaults.yaml") -> AppCfg:
             stick_to_bottom_threshold_px=float(_get(data, "ui.textbox.reveal.stick_to_bottom_threshold_px", 24)),
         ),
     )
+    
+def load_ui_defaults(path: str = "game/config/defaults.yaml") -> Dict[str, Any]:
+    """ Load UI/game defaults from YAML (textbox/theme/scrollbar/backgrounds/etc). """
+    with open(path, "r", encoding="utf-8") as f:
+        data = yaml.safe_load(f) or {}
+    return data
+
+def build_theme_from_defaults(defaults: Dict[str, Any]) -> Theme:
+    tdata = defaults.get("theme", {}) or {}
+    th = Theme()
+    
+     # core
+    th.font_path     = tdata.get("font_path", th.font_path)
+    th.font_size     = int(tdata.get("font_size", th.font_size))
+    th.text_rgb      = tuple(tdata.get("text_rgb", th.text_rgb))
+    th.box_bg        = tuple(tdata.get("box_bg", getattr(th, "box_bg", (10,10,10,170))))
+    th.box_border    = tuple(tdata.get("box_border", getattr(th, "box_border", (255,255,255,160))))
+    th.border_radius = int(tdata.get("border_radius", th.border_radius))
+    th.padding       = tuple(tdata.get("padding", th.padding))
+    th.line_spacing  = int(tdata.get("line_spacing", th.line_spacing))
+    th.entry_gap     = int(tdata.get("entry_gap", getattr(th, "entry_gap", 6)))
+
+    # scrollbar
+    sc = tdata.get("scrollbar", {}) or {}
+    th.scrollbar.width               = int(sc.get("width", th.scrollbar.width))
+    th.scrollbar.margin              = int(sc.get("margin", th.scrollbar.margin))
+    th.scrollbar.radius              = int(sc.get("radius", th.scrollbar.radius))
+    th.scrollbar.min_thumb_size      = int(sc.get("min_thumb_size", th.scrollbar.min_thumb_size))
+    th.scrollbar.show_when_no_overflow = bool(sc.get("show_when_no_overflow", th.scrollbar.show_when_no_overflow))
+    th.scrollbar.track_color         = tuple(sc.get("track_color", th.scrollbar.track_color))
+    th.scrollbar.thumb_color         = tuple(sc.get("thumb_color", th.scrollbar.thumb_color))
+    # optional nudge
+    setattr(th.scrollbar, "offset_x", int(sc.get("offset_x", getattr(th.scrollbar, "offset_x", 0))))
+
+    # choice panel
+    ch = tdata.get("choice", {}) or {}
+    setattr(th, "choice_inset_px",              int(ch.get("inset_px", getattr(th, "choice_inset_px", 12))))
+    setattr(th, "choice_padding",               tuple(ch.get("padding", getattr(th, "choice_padding", (8,10,8,10)))))
+    setattr(th, "choice_radius_delta",          int(ch.get("radius_delta", getattr(th, "choice_radius_delta", -4))))
+    setattr(th, "choice_underline_thickness",   int(ch.get("underline_thickness", getattr(th, "choice_underline_thickness", 2))))
+    setattr(th, "choice_anim_duration",         float(ch.get("anim_duration", getattr(th, "choice_anim_duration", 0.18))))
+    setattr(th, "choice_slide_px",              int(ch.get("slide_px", getattr(th, "choice_slide_px", 8))))
+
+    # wait indicator
+    wi = tdata.get("wait_indicator", {}) or {}
+    th.wait_indicator.enabled   = bool(wi.get("enabled", th.wait_indicator.enabled))
+    th.wait_indicator.char      = wi.get("char", th.wait_indicator.char)
+    th.wait_indicator.color     = tuple(wi.get("color", th.wait_indicator.color))
+    th.wait_indicator.period    = float(wi.get("period", th.wait_indicator.period))
+    th.wait_indicator.alpha_min = int(wi.get("alpha_min", th.wait_indicator.alpha_min))
+    th.wait_indicator.alpha_max = int(wi.get("alpha_max", th.wait_indicator.alpha_max))
+    th.wait_indicator.offset_x  = int(wi.get("offset_x", th.wait_indicator.offset_x))
+    th.wait_indicator.offset_y  = int(wi.get("offset_y", th.wait_indicator.offset_y))
+    th.wait_indicator.scale     = float(wi.get("scale", th.wait_indicator.scale))
+    th.wait_indicator.font_path = wi.get("font_path", th.wait_indicator.font_path)
+    return th
+
+def textbox_fracs_from_defaults(defaults: Dict[str, Any], fallback: Tuple[float, float]) -> Tuple[float, float]:
+    tb = defaults.get("textbox", {}) or {}
+    return (
+        float(tb.get("width_frac", fallback[0])),
+        float(tb.get("height_frac", fallback[1]))
+    )
+    
+def reveal_overrides_from_defaults(defaults: Dict[str, Any]) -> dict:
+    rv = defaults.get("reveal", {}) or {}
+    return {
+        "per_line_delay": float(rv.get("per_line_delay", 0.15)),
+        "intro_duration": float(rv.get("intro_duration", 0.18)),
+        "intro_offset_px": int(rv.get("intro_offset_px", 10)),
+        "stick_to_bottom_threshold_px": int(rv.get("stick_to_bottom_threshold_px", 24)),
+    }

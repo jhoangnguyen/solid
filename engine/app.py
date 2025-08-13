@@ -3,44 +3,39 @@ from dataclasses import dataclass
 from engine.ui.style import Theme, StyleContext, compute_centered_rect, WaitIndicatorStyle
 from engine.ui.widgets.text_box import TextBox, RevealParams
 from engine.ui.anim import Animator, Tween
-from engine.settings import load_settings, AppCfg
+from engine.settings import load_settings, AppCfg, load_ui_defaults, build_theme_from_defaults, textbox_fracs_from_defaults, reveal_overrides_from_defaults
 from engine.narrative.loader import load_story_file
 from engine.narrative.presenter import NodePresenter
 from engine.ui.brushes.image_brush import ImageBrush
 
 class GameApp:
     def __init__(self, cfg: AppCfg):
+        # Set config
         self.cfg = cfg
+        
+        # Initialize PyGame
         pygame.init()
+        
+        # Set window size and title
         pygame.display.set_caption(cfg.window.title)
         self.screen = pygame.display.set_mode((cfg.window.width, cfg.window.height), pygame.RESIZABLE)
+        
+        # Load default settings
+        defaults = load_ui_defaults("game/config/defaults.yaml")
+        self.theme = build_theme_from_defaults(defaults)
+        
+        # --- Textbox ---
+        wfrac, hfrac = textbox_fracs_from_defaults(defaults, (cfg.textbox.width_frac, cfg.textbox.height_frac))
+        tb_rect = compute_centered_rect(self.screen, wfrac, hfrac)
+        rv = reveal_overrides_from_defaults(defaults)
+        self.textbox = TextBox(tb_rect, self.theme, reveal=RevealParams(**rv))
+        
         self.clock = pygame.time.Clock()
         self.running = True
 
         self.anim = Animator()
-        theme = Theme()
-        theme.box_bg     = (10, 10, 10, 170)   # translucent dark
-        theme.box_border = (255, 255, 255, 160)  # optional translucent border
         
-        theme.wait_indicator = WaitIndicatorStyle(
-            char="\u25BC",
-            font_path="game/assets/fonts/NotoSansSymbols2-Regular.ttf",
-            color=(255, 255, 255),
-            period=1.0,
-            offset_x=6, offset_y=1, scale=0.5
-        )
-        self.theme = theme
-
-        # --- textbox ---
-        tb_rect = compute_centered_rect(self.screen, cfg.textbox.width_frac, cfg.textbox.height_frac)
-        self.textbox = TextBox(tb_rect, self.theme, reveal=RevealParams(
-            per_line_delay=cfg.reveal.per_line_delay,
-            intro_duration=cfg.reveal.intro_duration,
-            intro_offset_px=cfg.reveal.intro_offset_px,
-            stick_to_bottom_threshold_px=cfg.reveal.stick_to_bottom_threshold_px,
-        ))
-        
-        # --- load YAML ---
+        # --- Load YAML ---
         story_path = "game/content/prologue.yaml"
         self.story = load_story_file(story_path)
         self.current_node_id = self.story.start
@@ -50,11 +45,12 @@ class GameApp:
         
         self.hud_font = pygame.font.Font(None, 24)
         
-        # --- background ---
+        # --- Background ---
+        bg = (defaults.get("backgrounds", {}) or {}).get("window", {}) or {}
         self.window_bg = ImageBrush()
-        self.window_bg.set_image("game/assets/backgrounds/stock_fireplace.jpg")
-        self.window_bg.set_mode("cover")
-        self.window_bg.tint_rgba = (0, 0, 0, 64) # Optional dim
+        self.window_bg.set_image(bg.get("image_path"))
+        self.window_bg.set_mode(bg.get("mode", "cover"))
+        self.window_bg.tint_rgba = tuple(bg["tint_rgba"]) if bg.get("tint_rgba") is not None else None
 
     def handle_input(self):
         for e in pygame.event.get():
