@@ -6,6 +6,7 @@ from engine.ui.anim import Animator, Tween
 from engine.settings import load_settings, AppCfg
 from engine.narrative.loader import load_story_file
 from engine.narrative.presenter import NodePresenter
+from engine.ui.brushes.image_brush import ImageBrush
 
 class GameApp:
     def __init__(self, cfg: AppCfg):
@@ -18,6 +19,9 @@ class GameApp:
 
         self.anim = Animator()
         theme = Theme()
+        theme.box_bg     = (10, 10, 10, 170)   # translucent dark
+        theme.box_border = (255, 255, 255, 160)  # optional translucent border
+        
         theme.wait_indicator = WaitIndicatorStyle(
             char="\u25BC",
             font_path="game/assets/fonts/NotoSansSymbols2-Regular.ttf",
@@ -27,7 +31,7 @@ class GameApp:
         )
         self.theme = theme
 
-        # textbox
+        # --- textbox ---
         tb_rect = compute_centered_rect(self.screen, cfg.textbox.width_frac, cfg.textbox.height_frac)
         self.textbox = TextBox(tb_rect, self.theme, reveal=RevealParams(
             per_line_delay=cfg.reveal.per_line_delay,
@@ -45,6 +49,12 @@ class GameApp:
         self.presenter.show_node(self.story.nodes[self.current_node_id])
         
         self.hud_font = pygame.font.Font(None, 24)
+        
+        # --- background ---
+        self.window_bg = ImageBrush()
+        self.window_bg.set_image("game/assets/backgrounds/stock_fireplace.jpg")
+        self.window_bg.set_mode("cover")
+        self.window_bg.tint_rgba = (0, 0, 0, 64) # Optional dim
 
     def handle_input(self):
         for e in pygame.event.get():
@@ -108,7 +118,8 @@ class GameApp:
         # pass
     
     def draw(self):
-        self.screen.fill(self.cfg.window.bg_rgb)
+        # self.screen.fill(self.cfg.window.bg_rgb)
+        self.window_bg.draw(self.screen, self.screen.get_rect())
         self.textbox.draw(self.screen)
         fps = int(self.clock.get_fps())
         hud = self.hud_font.render(f"{fps} FPS", True, (180, 180, 180))
