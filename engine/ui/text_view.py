@@ -7,6 +7,8 @@ import math
 
 from engine.ui.style import Theme
 from engine.ui.text_model import Entry
+from engine.ui.text_layout import TextLayout
+from engine.ui.fonts import FontCache
 
 def _ease_out_cubic(t: float) -> float:
     t = 0.0 if t < 0.0 else 1.0 if t > 1.0 else t
@@ -27,10 +29,12 @@ class TextView:
     - draw the wait-for-input indicator
     - compute content height (inc. Theme.entry_gap)
     """
-    def __init__(self, theme: Theme, fonts):
+    def __init__(self, theme: Theme, fonts: FontCache):
         self.theme = theme
         self.fonts = fonts
-        self.font = self.fonts.get(theme.font_path, theme.font_size)
+        self.layout = TextLayout(fonts, theme) 
+        self.font = self.layout.font
+        
         self._wrap_w: int = -1
         self._cache: Dict[Entry, _Layout] = {}
         self._blink_t: float = 0.0  # for wait-indicator
@@ -38,10 +42,16 @@ class TextView:
     # --------- public ---------
     def set_theme(self, theme: Theme) -> None:
         self.theme = theme
+        self.layout.set_theme(theme)
+        self.font = self.layout.font
         self.invalidate_layout()
 
     def update(self, dt: float) -> None:
         self._blink_t += dt
+        
+    def invalidate_layout(self) -> None:
+        self._wrap_w = -1
+        self._cache.clear()
 
     def ensure_layout(self, wrap_w: int, entries: List[Entry]) -> None:
         """
@@ -54,7 +64,7 @@ class TextView:
             return
 
         # Always grab the font via FontCache (in case theme changed)
-        self.font = self.fonts.get(self.theme.font_path, self.theme.font_size)
+        self.font = self.layout.font
 
         if wrap_w != self._wrap_w:
             # Width changed -> rewrap/re-render the entries we were asked about.
@@ -150,58 +160,8 @@ class TextView:
 
     # --------- internals ---------
     def _layout_entry(self, e: Entry, wrap_w: int) -> _Layout:
-        lines = self._wrap_text(e.text or "", wrap_w)
-        render = self.font.render
-        color = self.theme.text_rgb
-        surfaces = [render(line, True, color) for line in lines]
-        gap = self.theme.line_spacing
-        height = sum(s.get_height() for s in surfaces) + (len(surfaces) - 1) * gap if surfaces else 0
+        surfaces, height = self.layout.layout(e.text or "", wrap_w)
         return _Layout(surfaces, height)
-
-    def _wrap_text(self, text: str, wrap_w: int) -> List[str]:
-        if not text:
-            return []
-        out: List[str] = []
-        measure = self.font.size
-        for raw in text.splitlines():
-            words = raw.split(" ")
-            if not words:
-                out.append("")
-                continue
-            cur = ""
-            for w in words:
-                cand = w if not cur else f"{cur} {w}"
-                if measure(cand)[0] <= wrap_w:
-                    cur = cand
-                else:
-                    if cur:
-                        out.append(cur)
-                    if measure(w)[0] <= wrap_w:
-                        cur = w
-                    else:
-                        chunks = self._hard_wrap_long_word(w, wrap_w, measure)
-                        out.extend(chunks[:-1])
-                        cur = chunks[-1] if chunks else ""
-            out.append(cur)
-        return out
-
-    def _hard_wrap_long_word(self, word: str, wrap_w: int, measure) -> List[str]:
-        parts: List[str] = []
-        i, n = 0, len(word)
-        while i < n:
-            lo, hi = 1, n - i
-            best = 1
-            while lo <= hi:
-                mid = (lo + hi) // 2
-                seg = word[i:i+mid]
-                if measure(seg)[0] <= wrap_w:
-                    best = mid; lo = mid + 1
-                else:
-                    hi = mid - 1
-            seg = word[i:i+best]
-            if not seg: break
-            parts.append(seg); i += best
-        return parts
 
     # ---------- wait indicator ----------
     def _get_wait_style(self) -> dict:
@@ -243,10 +203,10 @@ class TextView:
         # pick font for the indicator
         size = max(8, int(self.theme.font_size * max(0.1, float(wi["scale"]))))
         font_path = wi.get("font_path") or self.theme.font_path
-        font = pygame.font.Font(font_path, size)
+        font = self.fonts.get(font_path, size)
         char = str(wi["char"])
-
-        has_glyph = bool(font.metrics(char) and font.metrics(char)[0])
+        has_metrics = font.metrics(char)
+        has_glyph = bool(has_metrics and has_metrics[0])
         if has_glyph:
             glyph = font.render(char, True, wi["color"])
             if not (glyph.get_flags() & pygame.SRCALPHA):
@@ -258,7 +218,7 @@ class TextView:
 
             # baseline alignment
             if wi.get("align", "baseline") == "baseline":
-                baseline_y = y_top + self.font.get_ascent()
+                baseline_y = y_top + self.layout.ascent()
                 y = baseline_y - font.get_ascent() + int(wi["offset_y"])
             else:
                 baseline_bottom = y_top + line_h
