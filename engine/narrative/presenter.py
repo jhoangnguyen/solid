@@ -4,18 +4,55 @@ from engine.narrative.types import Node, Choice, Story
 from engine.ui.widgets.text_box import TextBox
 
 class NodePresenter:
-    def __init__(self, textbox: TextBox, story: Story):
+    def __init__(self, textbox: TextBox, story: Story, set_background=None):
         self.tb = textbox
         self.story = story
         self._prepared: Optional[List[str]] | None = None
         self._shown: bool = False
         self._choices: list[Choice] | None = None
+        self._set_background = set_background
+        
+    def _resolve_bg(self, raw):
+        """
+        Return (spec, transition, duration)
+        - raw may be None, string path/key, or dict
+        - If string matches a registry key (story.backgrounds), resolve to dict
+        - If dict may include optional 'transition' and 'duration'
+        """
+        if raw is None:
+            return None, "crossfade", 0.35
+
+        # registry lookup by key (optional)
+        if isinstance(raw, str) and hasattr(self.story, "backgrounds"):
+            reg = getattr(self.story, "backgrounds") or {}
+            if raw in reg:
+                raw = reg[raw]
+
+        transition = "crossfade"
+        duration = 0.35
+
+        if isinstance(raw, dict):
+            # copy so we don't mutate node.bg
+            spec = dict(raw)
+            transition = spec.pop("transition", transition)
+            duration = float(spec.pop("duration", duration))
+            return spec, transition, duration
+
+        # string path (or already-resolved)
+        return raw, transition, duration
 
     def show_node(self, node: Node) -> None:
+        # background first, so the fade starts alongside the new text
+        if self._set_background:
+            spec, trans, dur = self._resolve_bg(node.bg)
+            if spec is not None:
+                self._set_background(spec, transition=trans, duration=dur)
+
         self.tb.hide_choice_box()
         self.tb.clear()
         self.tb.set_follow_bottom(True)
-        # Queue the say block (one per press)
+
+        # say block (queued as line-by-line, waiting for input)
         self.tb.model.queue_lines(node.say, wait_for_input=True)
 
         # Prepare the choices block (rendered later as an overlay)

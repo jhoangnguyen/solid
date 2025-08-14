@@ -60,7 +60,7 @@ theme:
 
 backgrounds:
   window:
-    image_path: game/assets/backgrounds/stock_fireplace.jpog
+    image_path: game/assets/backgrounds/stock_fireplace.jpg
     mode: cover
     tint_rgba: [0, 0, 0, 64]
   textbox:

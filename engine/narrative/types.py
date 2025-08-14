@@ -1,6 +1,6 @@
 from __future__ import annotations
 from dataclasses import dataclass, field
-from typing import Optional, Dict, List
+from typing import Optional, Dict, List, Any
 
 @dataclass(eq=False)
 class Choice:
@@ -15,6 +15,7 @@ class Node:
     key: str
     say: str                    # Original multiline block
     choices: List[Choice] = field(default_factory=list)
+    bg: Any | None = None
     
 @dataclass
 class Story:

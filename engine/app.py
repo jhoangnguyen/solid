@@ -7,6 +7,7 @@ from engine.settings import load_settings, AppCfg, load_ui_defaults, build_theme
 from engine.narrative.loader import load_story_file
 from engine.narrative.presenter import NodePresenter
 from engine.ui.brushes.image_brush import ImageBrush
+from engine.ui.background_manager import BackgroundManager
 
 class GameApp:
     def __init__(self, cfg: AppCfg):
@@ -40,18 +41,37 @@ class GameApp:
         self.story = load_story_file(story_path)
         self.current_node_id = self.story.start
         
-        self.presenter = NodePresenter(self.textbox, self.story)
+        # --- Background Manager ---
+        self.bg = BackgroundManager()                         # create the manager
+        
+        # Seed initial background from defaults.yaml if present; otherwise fall back to the old fireplace.
+        try:
+            defaults = load_ui_defaults("game/config/defaults.yaml")
+            win_bg = (defaults.get("backgrounds", {}) or {}).get("window", {}) or {}
+            if win_bg:
+            # accept dict spec straight from YAML
+                self.bg.set(win_bg, transition="cut")
+            else:
+                self.bg.set({
+                    "image_path": "game/assets/backgrounds/stock_fireplace.jpg",
+                    "mode": "cover",
+                "tint_rgba": (0, 0, 0, 64),
+                }, transition="cut")
+        except Exception:
+                # Safe fallback if defaults.yaml isn’t available
+                self.bg.set({
+                "image_path": "game/assets/backgrounds/stock_fireplace.jpg",
+                "mode": "cover",
+                "tint_rgba": (0, 0, 0, 64),
+                }, transition="cut")
+
+        # --- Node Presenter --- 
+        # Loads each node in .yaml files along with the background
+        self.presenter = NodePresenter(self.textbox, self.story, set_background=self.bg.set)
         self.presenter.show_node(self.story.nodes[self.current_node_id])
         
         self.hud_font = pygame.font.Font(None, 24)
         
-        # --- Background ---
-        bg = (defaults.get("backgrounds", {}) or {}).get("window", {}) or {}
-        self.window_bg = ImageBrush()
-        self.window_bg.set_image(bg.get("image_path"))
-        self.window_bg.set_mode(bg.get("mode", "cover"))
-        self.window_bg.tint_rgba = tuple(bg["tint_rgba"]) if bg.get("tint_rgba") is not None else None
-
     def handle_input(self):
         for e in pygame.event.get():
             if e.type == pygame.QUIT:
@@ -111,11 +131,11 @@ class GameApp:
         # Function to run on delta time to update game state. 
         self.presenter.update(dt)
         self.textbox.update(dt)
+        self.bg.update(dt)
         # pass
     
     def draw(self):
-        # self.screen.fill(self.cfg.window.bg_rgb)
-        self.window_bg.draw(self.screen, self.screen.get_rect())
+        self.bg.draw(self.screen, self.screen.get_rect())
         self.textbox.draw(self.screen)
         fps = int(self.clock.get_fps())
         hud = self.hud_font.render(f"{fps} FPS", True, (180, 180, 180))

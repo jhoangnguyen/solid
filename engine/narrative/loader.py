@@ -52,6 +52,8 @@ def load_story_file(path: str) -> Story:
         elif not isinstance(say, str):
             say = str(say or "")
             
+        bg_spec = body.get("bg") # Retrieve background spec
+            
         # choices: list of {id, text, goto?}
         choices = []
         for idx, c in enumerate(body.get("choices", []) or []):
@@ -63,7 +65,14 @@ def load_story_file(path: str) -> Story:
             choices.append(Choice(id=cid, text=text, goto=goto))
             
         fqid = _fq(ns, key)
-        node = Node(fqid=fqid, namespace=ns, key=key, say=say, choices=choices)
+        node = Node(
+            fqid=fqid, 
+            namespace=ns,
+            key=key, 
+            say=say, 
+            choices=choices, 
+            bg=bg_spec
+        )
         nodes[fqid] = node
         if first_fqid is None:
             first_fqid = fqid

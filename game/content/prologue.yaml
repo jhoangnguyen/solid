@@ -26,6 +26,7 @@ nodes:
         goto: training_grounds1
 
   training_grounds1:
+    bg: game/assets/backgrounds/barn.jpg
     say: |
       “You’re the Captain of the Grinswalde Knights, aren’t you? How come you aren’t out there venturing into the new dungeons that’ve been popping up everywhere? You’re easily worth an entire squadron alone.”
       This was never questioned previously. The assumption of the Horizon as a game made players follow game logic. Quests and missions were for players to complete, never for background characters. There was no wondering why Fynn Baumann, who if ranked in the player’s leaderboard would be top ten, wasn’t venturing out herself.
