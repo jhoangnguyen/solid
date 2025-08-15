@@ -10,6 +10,7 @@ class ScrollbarStyle:
     show_when_no_overflow: bool = True
     track_color: tuple[int, int, int, int] = (255, 255, 255, 32)
     thumb_color: tuple[int, int, int, int] = (255, 255, 255, 192)
+    offset_x: int = 15
     def derive(self, **overrides): return replace(self, **overrides)
 
 @dataclass
@@ -35,9 +36,9 @@ class Theme:
     box_border: tuple[int, int, int] = (60, 64, 72)
     border_radius: int = 16
     padding: tuple[int, int, int, int] = (24, 28, 24, 28)
-    line_spacing: int = 6
+    line_spacing: int = 8
     scrollbar: ScrollbarStyle = field(default_factory=ScrollbarStyle)
-    entry_gap: int = 5
+    entry_gap: int = 8
     wait_indicator: WaitIndicatorStyle = field(default_factory=WaitIndicatorStyle)
     
     def derive(self, **overrides) -> "Theme":

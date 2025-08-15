@@ -4,17 +4,69 @@ window:
   width: 1280
   height: 720
   title: HORIZON
-  bg_rgb: [14, 15, 18]
+  # bg_rgb: [14, 15, 18]
+  bg_rgb: [8, 8, 10]
 
-ui:
+textbox:
+  width_frac: 0.40
+  height_frac: 0.80
+
+reveal:
+  per_line_delay: 0.15
+  intro_duration: 0.18
+  intro_offset_px: 10
+  stick_to_bottom_threshold_px: 24
+
+theme:
+  font_path: null
+  font_size: 22
+  text_rgb: [235, 235, 235]
+  box_bg: [10, 10, 10, 170]   # RGBA so window photo shows through
+  box_border: [255, 255, 255, 160]
+  border_radius: 12
+  padding: [14, 14, 14, 14] # t, r, b, l
+  line_spacing: 4
+  entry_gap: 6
+
+  scrollbar:
+    width: 6
+    margin: 6
+    radius: 3
+    min_thumb_size: 24
+    show_when_no_overflow: false
+    track_color: [255, 255, 255, 30]
+    thumb_color: [255, 255, 255, 160]
+    offset_x: 15
+
+  choice:
+    inset_px: 12
+    padding: [8, 10, 8, 10] # t, r, b, l
+    radius_delta: -4        # panel radius = border_radius + delta
+    underline_thickness: 2
+    anim_duration: 0.18
+    slide_px: 8     # the little pop-in slide
+
+  wait_indicator:
+    enabled: true
+    char: "\u25BC"
+    color: [237, 237, 237]
+    period: 1.0
+    alpha_min: 40
+    alpha_max: 255
+    offset_x: 6
+    offset_y: 2
+    scale: 0.75
+    font_path: game/assets/fonts/NotoSansSymbols2-Regular.ttf
+
+backgrounds:
+  window:
+    image_path: game/assets/backgrounds/stock_fireplace.jpg
+    mode: cover
+    tint_rgba: [0, 0, 0, 64]
   textbox:
-    width_frac: 0.35    # width = 30% of window
-    height_frac: 0.8   # height = 80% of window
-    reveal:
-      per_line_delay: 0.15
-      intro_duration: 0.18
-      intro_offset_px: 10
-      stick_to_bottom_threshold_px: 30
+    image_path: null
+    mode: cover
+    tint_rgba: null
 
 input:
   scroll_wheel_pixels: 40

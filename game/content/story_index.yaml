@@ -1,0 +1,3 @@
+start: prologue.market_offer      # <namespace>.<node>
+files:
+  - game/content/prologue.yaml

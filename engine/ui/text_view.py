@@ -7,6 +7,9 @@ import math
 
 from engine.ui.style import Theme
 from engine.ui.text_model import Entry
+from engine.ui.text_layout import TextLayout
+from engine.ui.fonts import FontCache
+from engine.ui.background_manager import BackgroundManager
 
 def _ease_out_cubic(t: float) -> float:
     t = 0.0 if t < 0.0 else 1.0 if t > 1.0 else t
@@ -27,38 +30,65 @@ class TextView:
     - draw the wait-for-input indicator
     - compute content height (inc. Theme.entry_gap)
     """
-    def __init__(self, theme: Theme):
+    def __init__(self, theme: Theme, fonts: FontCache):
         self.theme = theme
-        self.font = pygame.font.Font(theme.font_path, theme.font_size)
+        self.fonts = fonts
+        self.layout = TextLayout(fonts, theme) 
+        self.font = self.layout.font
+        
         self._wrap_w: int = -1
         self._cache: Dict[Entry, _Layout] = {}
         self._blink_t: float = 0.0  # for wait-indicator
+        
+        self._bg_manager = None
+        self._bg_slot = None
 
     # --------- public ---------
     def set_theme(self, theme: Theme) -> None:
         self.theme = theme
-        self.font = pygame.font.Font(theme.font_path, theme.font_size)
+        self.layout.set_theme(theme)
+        self.font = self.layout.font
         self.invalidate_layout()
+        
+    def set_background_slot(self, bg_manager: BackgroundManager, slot: str) -> None:
+        """ Make this view ask a BackgroundManager slot to paint the panel. """
+        self._bg_manager = bg_manager
+        self._bg_slot = slot
 
     def update(self, dt: float) -> None:
         self._blink_t += dt
-
+        
     def invalidate_layout(self) -> None:
         self._wrap_w = -1
         self._cache.clear()
 
     def ensure_layout(self, wrap_w: int, entries: List[Entry]) -> None:
+        """
+        Make sure we have wrapped+rendered layouts for all `entries` at `wrap_w`.
+        If width changed, rewrap everything we see; otherwise only build missing ones.
+        """
         if wrap_w <= 0:
             self._wrap_w = wrap_w
             self._cache.clear()
             return
-        if wrap_w == self._wrap_w:
-            return
-        self.font = pygame.font.Font(self.theme.font_path, self.theme.font_size)
-        self._wrap_w = wrap_w
-        self._cache.clear()
-        for e in entries:
-            self._cache[e] = self._layout_entry(e, wrap_w)
+
+        # Always grab the font via FontCache (in case theme changed)
+        self.font = self.layout.font
+
+        if wrap_w != self._wrap_w:
+            # Width changed -> rewrap/re-render the entries we were asked about.
+            self._wrap_w = wrap_w
+            self._cache.clear()
+            for e in entries:
+                self._cache[e] = self._layout_entry(e, wrap_w)
+        else:
+            # Width unchanged -> add any new entries that aren't cached yet.
+            for e in entries:
+                if e not in self._cache:
+                    self._cache[e] = self._layout_entry(e, wrap_w)
+                    stale = [k for k in self._cache.keys() if k not in entries]
+                    for k in stale: self._cache.pop(k, None)
+
 
     def content_height(self, entries: List[Entry]) -> int:
         if not entries:
@@ -87,9 +117,28 @@ class TextView:
     def draw_into(self, layer: pygame.Surface, widget_rect: pygame.Rect,
                   entries: List[Entry], scroll_y: float) -> None:
         th = self.theme
-        # bg + border
+        # Background + border
         full = pygame.Rect(0, 0, widget_rect.w, widget_rect.h)
-        pygame.draw.rect(layer, th.box_bg, full, border_radius=th.border_radius)
+        
+        use_managed_bg = (
+            self._bg_manager is not None
+            and self._bg_slot is not None
+            and getattr(self._bg_manager, "slot_has_image")(self._bg_slot)
+        )
+        
+        if use_managed_bg:
+            # Ensure rounded corners if the ImageBrush clips the rect
+            if hasattr(self._bg_manager, "_slot"):
+                ch = self._bg_manager._slot(self._bg_slot)
+                ch.current.radius = getattr(self.theme, "border_radius", 12)
+                if ch.next:
+                    ch.next.radius = getattr(self.theme, "border_radius", 12)
+            self._bg_manager.draw_slot(self._bg_slot, layer, full)
+        else:
+              # Fallback to the original themed box
+            pygame.draw.rect(layer, self.theme.box_bg, full, border_radius=self.theme.border_radius)
+   
+            
         pygame.draw.rect(layer, th.box_border, full, width=1, border_radius=th.border_radius)
 
         viewport = self.viewport_rect(widget_rect)
@@ -139,58 +188,8 @@ class TextView:
 
     # --------- internals ---------
     def _layout_entry(self, e: Entry, wrap_w: int) -> _Layout:
-        lines = self._wrap_text(e.text or "", wrap_w)
-        render = self.font.render
-        color = self.theme.text_rgb
-        surfaces = [render(line, True, color) for line in lines]
-        gap = self.theme.line_spacing
-        height = sum(s.get_height() for s in surfaces) + (len(surfaces) - 1) * gap if surfaces else 0
+        surfaces, height = self.layout.layout(e.text or "", wrap_w)
         return _Layout(surfaces, height)
-
-    def _wrap_text(self, text: str, wrap_w: int) -> List[str]:
-        if not text:
-            return []
-        out: List[str] = []
-        measure = self.font.size
-        for raw in text.splitlines():
-            words = raw.split(" ")
-            if not words:
-                out.append("")
-                continue
-            cur = ""
-            for w in words:
-                cand = w if not cur else f"{cur} {w}"
-                if measure(cand)[0] <= wrap_w:
-                    cur = cand
-                else:
-                    if cur:
-                        out.append(cur)
-                    if measure(w)[0] <= wrap_w:
-                        cur = w
-                    else:
-                        chunks = self._hard_wrap_long_word(w, wrap_w, measure)
-                        out.extend(chunks[:-1])
-                        cur = chunks[-1] if chunks else ""
-            out.append(cur)
-        return out
-
-    def _hard_wrap_long_word(self, word: str, wrap_w: int, measure) -> List[str]:
-        parts: List[str] = []
-        i, n = 0, len(word)
-        while i < n:
-            lo, hi = 1, n - i
-            best = 1
-            while lo <= hi:
-                mid = (lo + hi) // 2
-                seg = word[i:i+mid]
-                if measure(seg)[0] <= wrap_w:
-                    best = mid; lo = mid + 1
-                else:
-                    hi = mid - 1
-            seg = word[i:i+best]
-            if not seg: break
-            parts.append(seg); i += best
-        return parts
 
     # ---------- wait indicator ----------
     def _get_wait_style(self) -> dict:
@@ -232,10 +231,10 @@ class TextView:
         # pick font for the indicator
         size = max(8, int(self.theme.font_size * max(0.1, float(wi["scale"]))))
         font_path = wi.get("font_path") or self.theme.font_path
-        font = pygame.font.Font(font_path, size)
+        font = self.fonts.get(font_path, size)
         char = str(wi["char"])
-
-        has_glyph = bool(font.metrics(char) and font.metrics(char)[0])
+        has_metrics = font.metrics(char)
+        has_glyph = bool(has_metrics and has_metrics[0])
         if has_glyph:
             glyph = font.render(char, True, wi["color"])
             if not (glyph.get_flags() & pygame.SRCALPHA):
@@ -247,7 +246,7 @@ class TextView:
 
             # baseline alignment
             if wi.get("align", "baseline") == "baseline":
-                baseline_y = y_top + self.font.get_ascent()
+                baseline_y = y_top + self.layout.ascent()
                 y = baseline_y - font.get_ascent() + int(wi["offset_y"])
             else:
                 baseline_bottom = y_top + line_h

@@ -58,6 +58,17 @@ class TextModel:
             e.visible = True
             e.t = e.duration
             self._visible.append(e)
+            
+    def append_visible_lines(self, lines: List[str], animated: bool = True) -> None:
+        """
+        Append lines that are visiblie immediately (not queued). If animated=True,
+        the fade/slide animation will play
+        """
+        for line in lines or []:
+            e = self._make_entry(line, animated=animated, wait=False)
+            e.visible = True
+            e.t = 0.0
+            self._visible.append(e)
 
     # ---------- progression ----------
     def update(self, dt: float) -> dict:
