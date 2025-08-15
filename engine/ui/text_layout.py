@@ -1,7 +1,7 @@
 from __future__ import annotations
 from typing import List, Tuple, Optional
 from engine.ui.style import Theme
-from engine.ui.fonts import FontCache
+from engine.ui.fonts import FontCache, FontKey
 import pygame
 
 class TextLayout:
@@ -82,6 +82,52 @@ class TextLayout:
         lines = self.wrap(text or "", wrap_w)
         return self.render_lines(lines, color=color)
     
+    def wrap_lines(self, raw_text: str, wrap_w: int, fonts: FontCache, key: FontKey) -> List[str]:
+        """ Soft-wrap by spaces, hard-wrap long words; preserve explicit newlines. """
+        if wrap_w <= 0 or not raw_text:
+            return [] if not raw_text else raw_text.splitlines()
+        size = fonts.measure
+        out: List[str] = []
+        for raw in (raw_text or "").splitlines():
+            words = raw.split(" ")
+            if not words:
+                out.append("")
+                continue
+            cur = ""
+            for w in words:
+                cand = w if not cur else f"{cur} {w}"
+                if size(key, cand)[0] <= wrap_w:
+                    cur = cand
+                else:
+                    if cur:
+                        out.append(cur)
+                    if size(key, w)[0] <= wrap_w:
+                        cur = w
+                    else:
+                        chunks = self._hard_wrap_long_word(w, wrap_w, lambda s: size(key, s)[0])
+                        out.extend(chunks[:-1])
+            out.append(cur)
+        return out
+                
+    def render_wrapped(self, raw_text: str, wrap_w: int, line_spacing: int, color: Tuple[int, int, int], fonts: FontCache, key: FontKey) -> Tuple[List, int]:
+        """ Return [Surface,...] for each wrapped line + total height with spacing. """
+        lines = self.wrap_lines(raw_text, wrap_w, fonts, key)
+        surfaces = [fonts.render(key, ln, color) for ln in lines]
+        if not surfaces:
+            return [], 0
+        heights = [s.get_height() for s in surfaces]
+        total_h = sum(heights) + (len(surfaces) - 1) * max(0, line_spacing)
+        return surfaces, total_h
+        
+    def measure_wrapped(self, raw_text: str, wrap_w: int, line_spacing: int, fonts: FontCache, key: FontCache) -> Tuple[List[int], int]:
+        """ Return [line_heights,...] + total height (no renders). """
+        lines = self.wrap_lines(raw_text, wrap_w, fonts, key)
+        # Fast measure via a representative glyph (height), using font.get_height()
+        # but to be safe with tall glyphs, measure each line:
+        line_heights = [fonts.get_by_key(key).get_height() if ln == "" else fonts.measure(key, ln)[1] for ln in lines]
+        total_h = sum(line_heights) + (len(line_heights) - 1) * max(0, line_spacing)
+        return line_heights, total_h
+        
     # --- Cursor/Indicator Helpers ---
     
     def line_height(self) -> int:

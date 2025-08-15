@@ -31,6 +31,7 @@ class TextBox:
         "choices",
         "fonts",
         "_follow_bottom",
+        "_scratch",
         )
 
     def __init__(self, rect: pygame.Rect, theme: Theme, reveal: Optional[RevealParams] = None):
@@ -55,6 +56,7 @@ class TextBox:
 
         self.choices = ChoiceController()
         self._follow_bottom = True
+        self._scratch: pygame.Surface | None = None
 
     # ---------- authoring ----------
     def set_reveal_params(self, rp: RevealParams) -> None:
@@ -93,6 +95,7 @@ class TextBox:
         ratio = self.scroller.offset / old_max
 
         self.rect = new_rect.copy()
+        self._ensure_scratch()
         # force relayout now so scroll math is correct immediately
         viewport = self.view.viewport_rect(self.rect)
         self.view.ensure_layout(viewport.width, self.model.visible_entries)
@@ -266,8 +269,11 @@ class TextBox:
         if self.rect.w <= 0 or self.rect.h <= 0:
             return
 
-        layer = pygame.Surface(self.rect.size, pygame.SRCALPHA)
-
+        # layer = pygame.Surface(self.rect.size, pygame.SRCALPHA)
+        self._ensure_scratch()
+        layer = self._scratch
+        layer.fill((0, 0, 0, 0))
+        
         entries = self.model.visible_entries
         viewport = self.view.viewport_rect(self.rect)
 
@@ -301,11 +307,19 @@ class TextBox:
                 selected_idx=self.choices.sel
             )
 
-        # widget opacity
-        if self.opacity < 1.0:
-            layer.set_alpha(int(255 * max(0.0, min(1.0, self.opacity))))
+        # widget opacity: set temporarily, blit, then restore
+        # if self.opacity < 1.0:
+        #     layer.set_alpha(int(255 * max(0.0, min(1.0, self.opacity))))
 
-        surface.blit(layer, self.rect.topleft)
+        # surface.blit(layer, self.rect.topleft)
+        
+        if self.opacity < 1.0:
+            prev_alpha = layer.get_alpha()
+            layer.set_alpha(int(255 * max(0.0, min(1.0, self.opacity))))
+            surface.blit(layer, self.rect.topleft)
+            layer.set_alpha(prev_alpha) # Restore
+        else:
+            surface.blit(layer, self.rect.topleft)
 
     # ---------- helpers ----------
     def _near_bottom(self) -> bool:
@@ -314,7 +328,7 @@ class TextBox:
         return (self.max_scroll() - self.scroller.offset) <= max(0, px)
 
     def _visual_content_height(self) -> int:
-        # content height from view + any remaining animation offset on last line
+        # Content height from view + any remaining animation offset on last line
         h = self.view.content_height(self.model.visible_entries) + self.model.last_entry_anim_offset()
         if self.choices.active():
             viewport = self.view.viewport_rect(self.rect)
@@ -322,5 +336,10 @@ class TextBox:
         return h
     
     def _choice_gap_above(self) -> int:
-        # space between last text line and the panel
+        # Space between last text line and the panel
         return max(self.theme.entry_gap, self.theme.line_spacing)
+    
+    def _ensure_scratch(self) -> None:
+        """ Ensure we have a reusable ARGB surface matching self.rect.size. """
+        if (self._scratch is None) or (self._scratch.get_size() != self.rect.size):
+            self._scratch = pygame.Surface(self.rect.size, pygame.SRCALPHA)
