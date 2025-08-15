@@ -9,6 +9,7 @@ from engine.ui.style import Theme
 from engine.ui.text_model import Entry
 from engine.ui.text_layout import TextLayout
 from engine.ui.fonts import FontCache
+from engine.ui.background_manager import BackgroundManager
 
 def _ease_out_cubic(t: float) -> float:
     t = 0.0 if t < 0.0 else 1.0 if t > 1.0 else t
@@ -38,6 +39,9 @@ class TextView:
         self._wrap_w: int = -1
         self._cache: Dict[Entry, _Layout] = {}
         self._blink_t: float = 0.0  # for wait-indicator
+        
+        self._bg_manager = None
+        self._bg_slot = None
 
     # --------- public ---------
     def set_theme(self, theme: Theme) -> None:
@@ -45,6 +49,11 @@ class TextView:
         self.layout.set_theme(theme)
         self.font = self.layout.font
         self.invalidate_layout()
+        
+    def set_background_slot(self, bg_manager: BackgroundManager, slot: str) -> None:
+        """ Make this view ask a BackgroundManager slot to paint the panel. """
+        self._bg_manager = bg_manager
+        self._bg_slot = slot
 
     def update(self, dt: float) -> None:
         self._blink_t += dt
@@ -108,9 +117,28 @@ class TextView:
     def draw_into(self, layer: pygame.Surface, widget_rect: pygame.Rect,
                   entries: List[Entry], scroll_y: float) -> None:
         th = self.theme
-        # bg + border
+        # Background + border
         full = pygame.Rect(0, 0, widget_rect.w, widget_rect.h)
-        pygame.draw.rect(layer, th.box_bg, full, border_radius=th.border_radius)
+        
+        use_managed_bg = (
+            self._bg_manager is not None
+            and self._bg_slot is not None
+            and getattr(self._bg_manager, "slot_has_image")(self._bg_slot)
+        )
+        
+        if use_managed_bg:
+            # Ensure rounded corners if the ImageBrush clips the rect
+            if hasattr(self._bg_manager, "_slot"):
+                ch = self._bg_manager._slot(self._bg_slot)
+                ch.current.radius = getattr(self.theme, "border_radius", 12)
+                if ch.next:
+                    ch.next.radius = getattr(self.theme, "border_radius", 12)
+            self._bg_manager.draw_slot(self._bg_slot, layer, full)
+        else:
+              # Fallback to the original themed box
+            pygame.draw.rect(layer, self.theme.box_bg, full, border_radius=self.theme.border_radius)
+   
+            
         pygame.draw.rect(layer, th.box_border, full, width=1, border_radius=th.border_radius)
 
         viewport = self.viewport_rect(widget_rect)

@@ -53,6 +53,7 @@ def load_story_file(path: str) -> Story:
             say = str(say or "")
             
         bg_spec = body.get("bg") # Retrieve background spec
+        tb_bg_spec = body.get("textbox_bg")
             
         # choices: list of {id, text, goto?}
         choices = []
@@ -71,7 +72,8 @@ def load_story_file(path: str) -> Story:
             key=key, 
             say=say, 
             choices=choices, 
-            bg=bg_spec
+            bg=bg_spec,
+            textbox_bg=tb_bg_spec
         )
         nodes[fqid] = node
         if first_fqid is None:

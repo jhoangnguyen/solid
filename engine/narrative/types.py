@@ -16,6 +16,7 @@ class Node:
     say: str                    # Original multiline block
     choices: List[Choice] = field(default_factory=list)
     bg: Any | None = None
+    textbox_bg: Any | None = None
     
 @dataclass
 class Story:

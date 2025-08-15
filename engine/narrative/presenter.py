@@ -2,15 +2,16 @@ from __future__ import annotations
 from typing import List, Optional
 from engine.narrative.types import Node, Choice, Story
 from engine.ui.widgets.text_box import TextBox
+from engine.ui.background_manager import BackgroundManager
 
 class NodePresenter:
-    def __init__(self, textbox: TextBox, story: Story, set_background=None):
+    def __init__(self, textbox: TextBox, story: Story, bg_manager: BackgroundManager =None):
         self.tb = textbox
         self.story = story
         self._prepared: Optional[List[str]] | None = None
         self._shown: bool = False
         self._choices: list[Choice] | None = None
-        self._set_background = set_background
+        self.bg = bg_manager
         
     def _resolve_bg(self, raw):
         """
@@ -42,11 +43,21 @@ class NodePresenter:
         return raw, transition, duration
 
     def show_node(self, node: Node) -> None:
-        # background first, so the fade starts alongside the new text
-        if self._set_background:
+        # Background first, so the fade starts alongside the new text
+        # Window background (if provided)
+        if self.bg and getattr(node, "bg", None) is not None:
             spec, trans, dur = self._resolve_bg(node.bg)
             if spec is not None:
-                self._set_background(spec, transition=trans, duration=dur)
+                self.bg.set(spec, slot="window", transition=trans, duration=dur)
+
+        # Textbox background: set if provided, else clear so we fall back to original drawing
+        if self.bg:
+            if getattr(node, "textbox_bg", None) is not None:
+                spec, trans, dur = self._resolve_bg(node.textbox_bg)
+                if spec is not None:
+                    self.bg.set(spec, slot="textbox", transition=trans, duration=dur)
+            else:
+                self.bg.clear("textbox")
 
         self.tb.hide_choice_box()
         self.tb.clear()

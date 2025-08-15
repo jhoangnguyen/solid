@@ -44,6 +44,8 @@ class GameApp:
         # --- Background Manager ---
         self.bg = BackgroundManager()                         # create the manager
         
+        self.textbox.view.set_background_slot(self.bg, "textbox")
+        
         # Seed initial background from defaults.yaml if present; otherwise fall back to the old fireplace.
         try:
             defaults = load_ui_defaults("game/config/defaults.yaml")
@@ -67,7 +69,7 @@ class GameApp:
 
         # --- Node Presenter --- 
         # Loads each node in .yaml files along with the background
-        self.presenter = NodePresenter(self.textbox, self.story, set_background=self.bg.set)
+        self.presenter = NodePresenter(self.textbox, self.story, bg_manager=self.bg)
         self.presenter.show_node(self.story.nodes[self.current_node_id])
         
         self.hud_font = pygame.font.Font(None, 24)
