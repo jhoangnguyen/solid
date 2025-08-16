@@ -33,8 +33,7 @@ class TextView:
     def __init__(self, theme: Theme, fonts: FontCache):
         self.theme = theme
         self.fonts = fonts
-        self.layout = TextLayout(fonts, theme) 
-        self.font = self.layout.font
+        self.layout = TextLayout(fonts, theme)
         
         self._wrap_w: int = -1
         self._cache: Dict[Entry, _Layout] = {}
@@ -42,12 +41,16 @@ class TextView:
         
         self._bg_manager = None
         self._bg_slot = None
+        # wait-indicator glyph cache
+        self._wi_cache = {
+            "char": None, "size": None, "color": None, "font_path": None,
+            "glyph": None, "font": None
+        }
 
     # --------- public ---------
     def set_theme(self, theme: Theme) -> None:
         self.theme = theme
         self.layout.set_theme(theme)
-        self.font = self.layout.font
         self.invalidate_layout()
         
     def set_background_slot(self, bg_manager: BackgroundManager, slot: str) -> None:
@@ -73,7 +76,7 @@ class TextView:
             return
 
         # Always grab the font via FontCache (in case theme changed)
-        self.font = self.layout.font
+        _ = self.layout.font
 
         if wrap_w != self._wrap_w:
             # Width changed -> rewrap/re-render the entries we were asked about.
@@ -86,8 +89,8 @@ class TextView:
             for e in entries:
                 if e not in self._cache:
                     self._cache[e] = self._layout_entry(e, wrap_w)
-                    stale = [k for k in self._cache.keys() if k not in entries]
-                    for k in stale: self._cache.pop(k, None)
+            stale = [k for k in self._cache.keys() if k not in entries]
+            for k in stale: self._cache.pop(k, None)
 
 
     def content_height(self, entries: List[Entry]) -> int:
@@ -231,12 +234,16 @@ class TextView:
         # pick font for the indicator
         size = max(8, int(self.theme.font_size * max(0.1, float(wi["scale"]))))
         font_path = wi.get("font_path") or self.theme.font_path
-        font = self.fonts.get(font_path, size)
         char = str(wi["char"])
-        has_metrics = font.metrics(char)
-        has_glyph = bool(has_metrics and has_metrics[0])
+        cache = self._wi_cache
+        if (cache["char"], cache["size"], cache["color"], cache["font_path"]) != (char, size, tuple(wi["color"]), font_path):
+            cache["font"] = self.fonts.get(font_path, size)
+            cache["glyph"] = cache["font"].render(char, True, wi["color"])
+            cache["char"], cache["size"], cache["color"], cache["font_path"] = char, size, tuple(wi["color"]), font_path
+        font = cache["font"]
+        glyph = cache["glyph"]
+        has_glyph = glyph is not None and glyph.get_width() > 0
         if has_glyph:
-            glyph = font.render(char, True, wi["color"])
             if not (glyph.get_flags() & pygame.SRCALPHA):
                 glyph = glyph.convert_alpha()
             # compose onto a fresh surface, multiply alpha
