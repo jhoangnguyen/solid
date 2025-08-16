@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import Dict, List, Tuple, Optional
 import pygame
 import math
+import bisect
 
 from engine.ui.style import Theme
 from engine.ui.text_model import Entry
@@ -161,19 +162,25 @@ class TextView:
 
         for idx_entry, e in enumerate(entries):
             lay = self._cache[e]
-            # entry easing
-            # u = 1.0 if e.duration <= 0 else _ease_out_cubic(e.t / e.duration)
-            # offset = int((1.0 - u) * e.offset_px)
-            # alpha = int(255 * u)
-            
+            # entry easing            
             # Is this a typewriter entry? (This will be eoncded as animated with no slide)
             is_typing = (e.duration > 0 and e.offset_px == 0)
             u = 1.0 if e.duration <= 0 else _ease_out_cubic(e.t / e.duration)
             offset = 0 if is_typing else int((1.0 - u) * e.offset_px)
             alpha = 255 if is_typing else int(255 * u)
             
-            # Characters this entry should show for typing mode
-            chars_to_show = lay.total_chars if not is_typing else int(round(lay.total_chars * max(0.0, min(1.0, e.t / e.duration))))
+            if not is_typing:
+                chars_to_show = lay.total_chars
+            else:
+                if getattr(e, "cm_reveal", None):
+                    frac = max(0.0, min(1.0, (e.t / e.duration) if e.duration > 0 else 1.0))
+                    # cm_reveal has length N + 1; find larges index where cm <= frac
+                    chars_to_show = bisect.bisect_right(e.cm_reveal, frac) - 1
+                    chars_to_show = max(0, min(lay.total_chars, chars_to_show))
+                else:
+                    # Fallback: proportional to time (no punctuation weighting)
+                    frac = max(0.0, min(1.0, e.t / e.duration)) if e.duration > 0 else 1.0
+                    chars_to_show = int(round(lay.total_chars * frac))
 
             for j, surf in enumerate(lay.surfaces):
                 h = surf.get_height()
@@ -184,10 +191,6 @@ class TextView:
                     indicator_pos = (viewport.x + surf.get_width(), y + offset, h)
 
                 if y + h + offset >= viewport.y and y + offset <= viewport.bottom:
-                    # prev_alpha = surf.get_alpha()
-                    # surf.set_alpha(alpha)
-                    # layer.blit(surf, (viewport.x, y + offset))
-                    # surf.set_alpha(prev_alpha)
                     if is_typing:
                         # Determine how many chars of this wrapped line are visible
                         line_len = len(lay.lines[j])
@@ -219,10 +222,7 @@ class TextView:
         layer.set_clip(prev_clip)
 
     # --------- internals ---------
-    def _layout_entry(self, e: Entry, wrap_w: int) -> _Layout:
-        # surfaces, height = self.layout.layout(e.text or "", wrap_w)
-        # return _Layout(surfaces, height)
-        
+    def _layout_entry(self, e: Entry, wrap_w: int) -> _Layout:        
         # Wrap, render, and precompute prefix widths for fast typewriter clipping
         lines = self.layout.wrap(e.text or "", wrap_w)
         surfaces, height = self.layout.render_lines(lines)

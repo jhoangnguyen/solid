@@ -19,7 +19,7 @@ class GameApp:
         
         # Set window size and title
         pygame.display.set_caption(cfg.window.title)
-        self.screen = pygame.display.set_mode((cfg.window.width, cfg.window.height), pygame.RESIZABLE)
+        self.screen = pygame.display.set_mode((cfg.window.width, cfg.window.height), flags=pygame.RESIZABLE | pygame.SCALED | pygame.DOUBLEBUF)
         
         # Load default settings
         defaults = load_ui_defaults("game/config/defaults.yaml")

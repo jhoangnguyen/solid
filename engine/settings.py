@@ -32,8 +32,10 @@ class RevealCfg:
     intro_duration: float = 0.18            # Fade/slide duration for each line
     intro_offset_px: int = 10               # How many pixels the new line slides up from
     stick_to_bottom_threshold_px: int = 24  # If user is within threshoild from the bottom, keep scrolling
-    typewriter_enabled: bool = False        # Typewriter boolean
     chars_per_sec: float = 45.0             # Float for char rate
+    pause_short_s: float = 0.06             # , ; :
+    pause_long_s: float = 0.25              # . ! ?
+    pause_ellipsis_s: float = 0.35          # "..."
     
     
 @dataclass
@@ -81,8 +83,10 @@ def load_settings(path: str = "game/config/defaults.yaml") -> AppCfg:
             intro_duration=float(_get(data, "ui.textbox.reveal.intro_duration", 0.18)),
             intro_offset_px=float(_get(data, "ui.textbox.reveal.intro_offset_px", 10)),
             stick_to_bottom_threshold_px=float(_get(data, "ui.textbox.reveal.stick_to_bottom_threshold_px", 24)),
-            typewriter_enabled=bool(_get(data, "ui.textbox.reveal.typewriter_enabled", False)),
             chars_per_sec=float(_get(data, "ui.textbox.reveal.chars_per_sec", 45.0)),
+            pause_short_s=float(_get(data, "ui.textbox.reveal.pause_short_s", 0.06)),
+            pause_long_s=float(_get(data, "ui.textbox.reveal.pause_long_s", 0.25)),
+            pause_ellipsis_s=float(_get(data, "ui.textbox.reveal.pause_ellipsis_s", 0.35)),
         ),
     )
     
@@ -156,6 +160,8 @@ def reveal_overrides_from_defaults(defaults: Dict[str, Any]) -> dict:
         "intro_duration": float(rv.get("intro_duration", 0.18)),
         "intro_offset_px": int(rv.get("intro_offset_px", 10)),
         "stick_to_bottom_threshold_px": int(rv.get("stick_to_bottom_threshold_px", 24)),
-        "typewriter_enabled": bool(rv.get("typewriter_enabled", False)),
         "chars_per_sec": float(rv.get("chars_per_sec", 45.0)),
+        "pause_short_s": float(rv.get("pause_short_s", 0.06)),
+        "pause_long_s": float(rv.get("pause_long_s", 0.25)),
+        "pause_ellipsis_s": float(rv.get("pause_ellipsis_s", 0.35)),
     }
