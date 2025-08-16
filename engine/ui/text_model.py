@@ -10,7 +10,9 @@ class RevealParams:
     intro_duration: float = 0.18
     intro_offset_px: int = 10
     stick_to_bottom_threshold_px: int = 24  # used by the wrapper to keep view anchored
-
+    typewriter_enabled: bool = False
+    chars_per_sec: float = 45.0
+    
 @dataclass(eq=False)
 class Entry:
     text: str
@@ -100,18 +102,21 @@ class TextModel:
         """
         Finish current fade if any, then release the next line (if any).
         Returns True if something changed visibly.
-        """
-        changed = False
+        """           
+        # 1) Finish the current line if it's still animating
         if self._visible:
             last = self._visible[-1]
             if last.t < last.duration:
                 last.t = last.duration
-                changed = True
+                return True  # consume this click just to complete the line
+
+        # 2) No animation to finish -> advance to the next line
         if self._pending:
             self._release_timer = 0.0
             self._release_next()
-            changed = True
-        return changed
+            return True
+
+        return False
 
     def advance_line_now(self) -> bool:
         if self._pending:
@@ -144,6 +149,17 @@ class TextModel:
     # ---------- internals ----------
     def _make_entry(self, text: str, animated: bool, wait: bool) -> Entry:
         rp = self.reveal
+        if animated and rp.typewriter_enabled:
+            # Duration = characters / CPS (newlines chars are not rendered, and do not count towards this rate)
+            n_chars = len((text or "").replace("\n", ""))
+            dur = max(1e-6, n_chars / max(1e-6, rp.chars_per_sec))
+            return Entry(\
+                text=text, t=0.0,
+                duration=dur,
+                offset_px=0,
+                visible=False,
+                wait_for_input=wait
+            )
         return Entry(
             text=text,
             t=0.0,

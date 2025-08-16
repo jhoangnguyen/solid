@@ -18,7 +18,10 @@ def _ease_out_cubic(t: float) -> float:
 @dataclass
 class _Layout:
     surfaces: List[pygame.Surface]
-    height: int  # sum(heights) + (lines-1)*line_spacing
+    height: int                         # sum(heights) + (lines-1)*line_spacing
+    lines: List[str]                    # Wrapped strings (for typing)
+    prefix_w: List[List[int]]           # Per-line prefix widths for fast clipping
+    total_chars: int                    # Sum of len(lines) over wrapped lines
 
 class TextView:
     """
@@ -159,9 +162,18 @@ class TextView:
         for idx_entry, e in enumerate(entries):
             lay = self._cache[e]
             # entry easing
+            # u = 1.0 if e.duration <= 0 else _ease_out_cubic(e.t / e.duration)
+            # offset = int((1.0 - u) * e.offset_px)
+            # alpha = int(255 * u)
+            
+            # Is this a typewriter entry? (This will be eoncded as animated with no slide)
+            is_typing = (e.duration > 0 and e.offset_px == 0)
             u = 1.0 if e.duration <= 0 else _ease_out_cubic(e.t / e.duration)
-            offset = int((1.0 - u) * e.offset_px)
-            alpha = int(255 * u)
+            offset = 0 if is_typing else int((1.0 - u) * e.offset_px)
+            alpha = 255 if is_typing else int(255 * u)
+            
+            # Characters this entry should show for typing mode
+            chars_to_show = lay.total_chars if not is_typing else int(round(lay.total_chars * max(0.0, min(1.0, e.t / e.duration))))
 
             for j, surf in enumerate(lay.surfaces):
                 h = surf.get_height()
@@ -172,10 +184,27 @@ class TextView:
                     indicator_pos = (viewport.x + surf.get_width(), y + offset, h)
 
                 if y + h + offset >= viewport.y and y + offset <= viewport.bottom:
-                    prev_alpha = surf.get_alpha()
-                    surf.set_alpha(alpha)
-                    layer.blit(surf, (viewport.x, y + offset))
-                    surf.set_alpha(prev_alpha)
+                    # prev_alpha = surf.get_alpha()
+                    # surf.set_alpha(alpha)
+                    # layer.blit(surf, (viewport.x, y + offset))
+                    # surf.set_alpha(prev_alpha)
+                    if is_typing:
+                        # Determine how many chars of this wrapped line are visible
+                        line_len = len(lay.lines[j])
+                        show_in_line = max(0, min(line_len, chars_to_show))
+                        if show_in_line > 0:
+                            w_clip = lay.prefix_w[j][show_in_line]
+                            prev_alpha = surf.get_alpha()
+                            surf.set_alpha(alpha)
+                            layer.blit(surf, (viewport.x, y + offset), area=pygame.Rect(0, 0, w_clip, h))
+                            surf.set_alpha(prev_alpha)
+                        # Consume budget for next lines in this entry
+                        chars_to_show = max(0, chars_to_show - line_len)
+                    else:
+                        prev_alpha = surf.get_alpha()
+                        surf.set_alpha(alpha)
+                        layer.blit(surf, (viewport.x, y + offset))
+                        surf.set_alpha(prev_alpha)
 
                 y += h
                 if j < len(lay.surfaces) - 1:
@@ -191,8 +220,23 @@ class TextView:
 
     # --------- internals ---------
     def _layout_entry(self, e: Entry, wrap_w: int) -> _Layout:
-        surfaces, height = self.layout.layout(e.text or "", wrap_w)
-        return _Layout(surfaces, height)
+        # surfaces, height = self.layout.layout(e.text or "", wrap_w)
+        # return _Layout(surfaces, height)
+        
+        # Wrap, render, and precompute prefix widths for fast typewriter clipping
+        lines = self.layout.wrap(e.text or "", wrap_w)
+        surfaces, height = self.layout.render_lines(lines)
+        measure = self.layout.font.size
+        
+        prefix_w: List[List[int]] = []
+        for s in lines:
+            widths = [0]
+            for i in range(1, len(s) + 1):
+                widths.append(measure(s[:i])[0])
+            prefix_w.append(widths)
+        
+        total_chars = sum(len(s) for s in lines)
+        return _Layout(surfaces, height, lines, prefix_w, total_chars)
 
     # ---------- wait indicator ----------
     def _get_wait_style(self) -> dict:

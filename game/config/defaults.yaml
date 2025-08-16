@@ -16,6 +16,8 @@ reveal:
   intro_duration: 0.18
   intro_offset_px: 10
   stick_to_bottom_threshold_px: 24
+  typewriter_enabled: true
+  chars_per_sec: 60
 
 theme:
   font_path: null
