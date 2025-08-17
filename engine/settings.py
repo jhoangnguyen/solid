@@ -165,3 +165,11 @@ def reveal_overrides_from_defaults(defaults: Dict[str, Any]) -> dict:
         "pause_long_s": float(rv.get("pause_long_s", 0.25)),
         "pause_ellipsis_s": float(rv.get("pause_ellipsis_s", 0.35)),
     }
+    
+def presenter_overrides_from_defaults(defaults: Dict[str, Any]) -> dict:
+    pr = defaults.get("presenter", {}) or {}
+    return {
+        "clear_after_nodes": int(pr.get("clear_after_nodes", 0)),
+        "insert_node_separator": bool(pr.get("insert_node_separator", True)),
+        "separator_text": str(pr.get("separator_text", "")),
+    }

@@ -76,6 +76,16 @@ class TextModel:
             e.visible = True
             e.t = 0.0
             self._visible.append(e)
+            
+    def trim_oldest_entries(self, n: int) -> int:
+        """
+        Remove the first N visible entries. Returns how many were removed.
+        """
+        if n <= 0 or not self._visible:
+            return 0
+        n = min(n, len(self._visible))
+        del self._visible[:n]
+        return n
 
     # ---------- progression ----------
     def update(self, dt: float) -> dict:
@@ -213,10 +223,10 @@ class TextModel:
                 carry = rp.pause_ellipsis_s
                 i += 1
                 # Second dot (includes the carry), then no extra pause after it
-                times.append(base + carry); carry = 0.0
+                times.append(base + carry)
                 i += 1
                 # Third dot (plain base)
-                times.append(base)
+                times.append(base + carry)
                 i += 1
                 continue
 

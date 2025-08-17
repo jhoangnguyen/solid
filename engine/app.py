@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from engine.ui.style import Theme, StyleContext, compute_centered_rect, WaitIndicatorStyle
 from engine.ui.widgets.text_box import TextBox, RevealParams
 from engine.ui.anim import Animator, Tween
-from engine.settings import load_settings, AppCfg, load_ui_defaults, build_theme_from_defaults, textbox_fracs_from_defaults, reveal_overrides_from_defaults
+from engine.settings import load_settings, AppCfg, load_ui_defaults, build_theme_from_defaults, textbox_fracs_from_defaults, reveal_overrides_from_defaults, presenter_overrides_from_defaults
 from engine.narrative.loader import load_story_file
 from engine.narrative.presenter import NodePresenter
 from engine.ui.brushes.image_brush import ImageBrush
@@ -69,7 +69,15 @@ class GameApp:
 
         # --- Node Presenter --- 
         # Loads each node in .yaml files along with the background
-        self.presenter = NodePresenter(self.textbox, self.story, bg_manager=self.bg)
+        pr = presenter_overrides_from_defaults(defaults)
+        self.presenter = NodePresenter(
+            self.textbox, 
+            self.story, 
+            bg_manager=self.bg,
+            clear_after_nodes=pr.get("clear_after_nodes"),            # Keep N nodes, clear on the N + 1th
+            insert_node_separator=pr["insert_node_separator"],     # Blank line between nodes
+            separator_text=pr["separator_text"],               # Customize if desired, e.g. "-"
+            )
         self.presenter.show_node(self.story.nodes[self.current_node_id])
         
         self.hud_font = pygame.font.Font(None, 24)
