@@ -12,6 +12,7 @@ nodes:
       But it’s certainly strange. Even with the same kind eyes that seem to cradle you everytime you gaze into them, the same gentle pair I’ve been accustomed for most of my life,
       A Fynn without war scars isn’t really Fynn at all. 
       She blinks to look up upon noticing my silence.
+      TEST DIALOGUE FOR ... TEST DIALOGUE
       “Is there a problem?”
 
     choices:
@@ -24,10 +25,13 @@ nodes:
       - id: training_grounds0.marques
         text: Does Marques know you like him yet?
         goto: training_grounds1
+      - id: training_grounds0.test
+        text: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+        goto: training_grounds1
 
   training_grounds1:
     bg: game/assets/backgrounds/barn.jpg
-    textbox_bg: game/assets/backgrounds/paper.jpg
+    # textbox_bg: game/assets/backgrounds/paper.jpg
     say: |
       “You’re the Captain of the Grinswalde Knights, aren’t you? How come you aren’t out there venturing into the new dungeons that’ve been popping up everywhere? You’re easily worth an entire squadron alone.”
       This was never questioned previously. The assumption of the Horizon as a game made players follow game logic. Quests and missions were for players to complete, never for background characters. There was no wondering why Fynn Baumann, who if ranked in the player’s leaderboard would be top ten, wasn’t venturing out herself.

@@ -82,8 +82,22 @@ class TextBox:
         if not (animated or wait_for_input) and self._near_bottom():
             self.scroller.to_bottom()
             
+    def append_visible_lines(self, lines: list[str], animated: bool = False) -> None:
+        self.model.append_visible_lines(lines, animated=animated)
+        if (not animated) and (self._follow_bottom or self._near_bottom()):
+            self.scroller.to_bottom()    
+            
+    def trim_oldest_entries(self, n: int) -> int:
+        removed = self.model.trim_oldest_entries(n)
+        # Re-sync scroll metrics and keep bottom anchored if appropriate
+        self._sync_scroll_metrics()
+        if self._follow_bottom or self._near_bottom():
+            self.scroller.to_bottom()
+        return removed
+            
     def clear(self) -> None:
         """ Clears all queued dialogue and resets scroll. """
+        print("[TextBox.clear] clearing transcript")
         self.model.clear()
         self.scroller.to_top()
 
@@ -190,6 +204,7 @@ class TextBox:
         self.choices.set_hover_index(idx)
     
     def choice_click(self, window_pos: tuple[int, int]) -> int | None:
+        print("[TextBox.choice_click] choice was made")
         if not self.choices.active():
             return None
 
@@ -269,7 +284,6 @@ class TextBox:
         if self.rect.w <= 0 or self.rect.h <= 0:
             return
 
-        # layer = pygame.Surface(self.rect.size, pygame.SRCALPHA)
         self._ensure_scratch()
         layer = self._scratch
         layer.fill((0, 0, 0, 0))
@@ -308,11 +322,6 @@ class TextBox:
             )
 
         # widget opacity: set temporarily, blit, then restore
-        # if self.opacity < 1.0:
-        #     layer.set_alpha(int(255 * max(0.0, min(1.0, self.opacity))))
-
-        # surface.blit(layer, self.rect.topleft)
-        
         if self.opacity < 1.0:
             prev_alpha = layer.get_alpha()
             layer.set_alpha(int(255 * max(0.0, min(1.0, self.opacity))))

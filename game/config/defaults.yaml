@@ -1,64 +1,170 @@
+# Target frame rate for the main loop. Higher = smoother, but more CPU/GPU.
 fps: 60
 
 window:
+  # Pixel size of the window/screen.
   width: 1280
   height: 720
+
+  # Title shown in the window chrome.
   title: HORIZON
+
+  # Solid background color behind everything (window “wallpaper”).
+  # RGB array, 0–255 each. If you use a window background image (see backgrounds.window),
+  # this shows only where the image doesn’t fill.
   # bg_rgb: [14, 15, 18]
   bg_rgb: [8, 8, 10]
 
 textbox:
+  # Fraction of the window width/height that the textbox occupies (0.0–1.0).
+  # The textbox is centered; these control its size, not its position.
   width_frac: 0.40
   height_frac: 0.80
 
+presenter:
+  clear_after_nodes: 50          # 0 or null = clear every nodes (legacy). N > 0 = Keep N nodes before clearing
+  insert_node_separator: true    # Add a blank line between nodes when not clearing
+  separator_text: ""            # Or "-" if visual divider
+
 reveal:
+  # Extra delay (seconds) between *auto-released* lines (lines that don’t wait for input).
+  # Has no effect on lines gated by user input.
   per_line_delay: 0.15
+
+  # Duration (seconds) for the fade/slide intro animation on non-typewriter lines.
   intro_duration: 0.18
-  intro_offset_px: 10
+
+  # If > 0, each new line slides up by this many pixels while fading in (classic VN feel).
+  # If = 0, the line uses the typewriter effect instead (no slide; revealed per character).
+  intro_offset_px: 0
+
+  # When the user is near the bottom of the scroll, any new content keeps the view “stuck”
+  # to the bottom if it appears within this many pixels of the viewport’s bottom.
   stick_to_bottom_threshold_px: 24
 
+  # Typewriter: average characters revealed per second (only used when intro_offset_px == 0).
+  chars_per_sec: 60
+
+  # Typewriter punctuation pauses (seconds added on top of base char time):
+  # Short pause for commas/semicolons/colons.
+  pause_short_s: 0.06
+  # Long pause for periods, question and exclamation marks, and explicit newlines.
+  pause_long_s: 0.25
+  # Special, even longer pause for the first dot in an ellipsis "...".
+  pause_ellipsis_s: 1
+
+
 theme:
+  # Path to a .ttf/.otf font (relative to project root). Set to null to use pygame’s default font.
+  # Use a font with good unicode coverage if you display symbols/emoji.
   font_path: null
+
+  # Default font size (pixels).
   font_size: 22
+
+  # Default text color (RGB).
   text_rgb: [235, 235, 235]
-  box_bg: [10, 10, 10, 170]   # RGBA so window photo shows through
+
+  # Textbox panel background color (RGBA). Use alpha < 255 to let the window background show through.
+  box_bg: [10, 10, 10, 170]
+
+  # Textbox border color (RGBA).
   box_border: [255, 255, 255, 160]
+
+  # Corner radius (pixels) for the textbox panel (and matched visuals like backgrounds).
   border_radius: 12
+
+  # Inner padding of the textbox panel: [top, right, bottom, left] (pixels).
   padding: [14, 14, 14, 14] # t, r, b, l
-  line_spacing: 4
-  entry_gap: 6
+
+  # Extra pixels between wrapped lines (does not affect paragraph spacing; see entry_gap).
+  line_spacing: 3
+
+  # Pixels between entries (e.g., lines of dialogue) in the flow. Think paragraph spacing.
+  entry_gap: 18
+
+  choice_blur_scale: 0.25      # 0.20–0.35 = stronger blur
+  choice_blur_passes: 1        # 1–2
+  choice_tint_rgba: [0, 0, 0, 96]  # darken a bit over the blur for readability
 
   scrollbar:
+    # Width (pixels) of the scrollbar thumb.
     width: 6
+    # Horizontal space (pixels) reserved between content and the scrollbar track.
     margin: 6
+    # Corner radius of the scrollbar thumb.
     radius: 3
+    # Minimum thumb size (pixels), so the thumb isn’t too small for long content.
     min_thumb_size: 24
+    # If true, show a disabled-looking scrollbar even when content fits (no overflow).
     show_when_no_overflow: false
+    # Track (background) color of the scrollbar (RGBA).
     track_color: [255, 255, 255, 30]
+    # Thumb (handle) color (RGBA).
     thumb_color: [255, 255, 255, 160]
+    # Horizontal offset of the scrollbar from the textbox’s inner right edge (pixels).
     offset_x: 15
 
   choice:
+    # Inset of the choices block inside the textbox panel (pixels). Adds breathing room.
     inset_px: 12
+    # Padding inside each choice item: [top, right, bottom, left] (pixels).
     padding: [8, 10, 8, 10] # t, r, b, l
-    radius_delta: -4        # panel radius = border_radius + delta
+    # Choice panel corner radius = textbox border_radius + radius_delta (can be negative).
+    radius_delta: -4
+    # Thickness (pixels) for underline/selection decoration.
     underline_thickness: 2
+    # Duration (seconds) of the hover/selection pop-in animation.
     anim_duration: 0.18
-    slide_px: 8     # the little pop-in slide
+    # Amount (pixels) the choice “slides” during the pop-in animation.
+    slide_px: 8
 
   wait_indicator:
+    # Pulsing “continue” arrow at the end of the last fully revealed line.
     enabled: true
+    # The glyph to draw. "\u25BC" is a down-pointing triangle (▼).
     char: "\u25BC"
+    # Color of the glyph (RGB).
     color: [237, 237, 237]
+    # Seconds for a full pulse cycle (fade in/out).
     period: 1.0
+    # Minimum and maximum alpha during the pulse (0–255).
     alpha_min: 40
     alpha_max: 255
+    # Pixel offsets from the end of the line where the indicator is drawn.
     offset_x: 6
     offset_y: 2
+    # Scales the indicator’s font size relative to theme.font_size (1.0 = same size).
     scale: 0.75
+    # Font used for the indicator glyph (use a symbols font if your main font lacks ▼).
     font_path: game/assets/fonts/NotoSansSymbols2-Regular.ttf
+    # Optional: vertical alignment of the indicator relative to the text line.
+    # "baseline" places it on the text baseline, "bottom" anchors to the line box bottom.
+    # align: baseline  # (baseline | bottom)
+
+  player_choice:
+    prefix: "You: "
+    # bg_rgba: [120, 160, 240, 32]   # translucent highlight
+    bg_rgba: null
+    # left_bar_rgb: [140, 180, 255]  # accent bar
+    left_bar_rgb: [204, 177, 133]
+    left_bar_w: 3
+    pad_x: 6
+    pad_y: 6
+    indent_px: 16
+    text_offset_y: 3
+    text_tint_rgb: [204, 177, 133]  # uncomment to tint the text itself
+
+    blend: multiply            # "alpha" (default) or "multiply"
+    # multiply_rgb: [220, 230, 255]   # tint used for multiply mode (alpha ignored)
+    multiply_rgb: [230, 230, 230]   # neutral gray; try 224–236 to taste
 
 backgrounds:
+  # Background image layers. “window” fills the full window; “textbox” fills the textbox panel.
+  # Each layer supports:
+  # - image_path: path to an image file, or null for solid fill only
+  # - mode: how to fit the image (cover | contain | stretch | center | tile)
+  # - tint_rgba: optional RGBA overlay applied on top of the image (null to disable)
   window:
     image_path: game/assets/backgrounds/stock_fireplace.jpg
     mode: cover
@@ -69,5 +175,7 @@ backgrounds:
     tint_rgba: null
 
 input:
+  # Pixels per mouse-wheel “click” for scrolling in the textbox.
   scroll_wheel_pixels: 40
+  # “Page down/up” scroll jump as a fraction of the visible textbox height (0.0–1.0).
   page_scroll_frac: 0.9

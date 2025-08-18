@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import Dict, List, Tuple, Optional
 import pygame
 import math
+import bisect
 
 from engine.ui.style import Theme
 from engine.ui.text_model import Entry
@@ -18,7 +19,10 @@ def _ease_out_cubic(t: float) -> float:
 @dataclass
 class _Layout:
     surfaces: List[pygame.Surface]
-    height: int  # sum(heights) + (lines-1)*line_spacing
+    height: int                         # sum(heights) + (lines-1)*line_spacing
+    lines: List[str]                    # Wrapped strings (for typing)
+    prefix_w: List[List[int]]           # Per-line prefix widths for fast clipping
+    total_chars: int                    # Sum of len(lines) over wrapped lines
 
 class TextView:
     """
@@ -159,23 +163,103 @@ class TextView:
         for idx_entry, e in enumerate(entries):
             lay = self._cache[e]
             # entry easing
+            entry_y_start = y           # For background highlight bounds            
+            # Is this a typewriter entry? (This will be eoncded as animated with no slide)
+            is_typing = (e.duration > 0 and e.offset_px == 0)
             u = 1.0 if e.duration <= 0 else _ease_out_cubic(e.t / e.duration)
-            offset = int((1.0 - u) * e.offset_px)
-            alpha = int(255 * u)
+            offset = 0 if is_typing else int((1.0 - u) * e.offset_px)
+            alpha = 255 if is_typing else int(255 * u)
+            
+            # Horizontal indent for player-choice entries
+            indent_px = 0
+            text_dy = 0
+            if getattr(e, "is_player_choice", False):
+                pcs = self._get_player_choice_style()
+                indent_px = int(pcs.get("indent_px", 0))
+                text_dy = int(pcs.get("text_offset_y", 0))
+            x_base = viewport.x + max(0, indent_px)
+            
+            if not is_typing:
+                chars_to_show = lay.total_chars
+            else:
+                if getattr(e, "cm_reveal", None):
+                    frac = max(0.0, min(1.0, (e.t / e.duration) if e.duration > 0 else 1.0))
+                    # cm_reveal has length N + 1; find larges index where cm <= frac
+                    chars_to_show = bisect.bisect_right(e.cm_reveal, frac) - 1
+                    chars_to_show = max(0, min(lay.total_chars, chars_to_show))
+                else:
+                    # Fallback: proportional to time (no punctuation weighting)
+                    frac = max(0.0, min(1.0, e.t / e.duration)) if e.duration > 0 else 1.0
+                    chars_to_show = int(round(lay.total_chars * frac))
 
+            if getattr(e, "is_player_choice", False):
+                pcs = self._get_player_choice_style()
+                if pcs.get("enabled", True):
+                    pad_y = int(pcs.get("pad_y", 2))
+                    rect = pygame.Rect(
+                        viewport.x,
+                        entry_y_start + offset - pad_y,
+                        viewport.w,
+                        lay.height + 2 * pad_y,
+                    )
+
+                    blend_mode = str(pcs.get("blend", "alpha")).lower()
+
+                    if blend_mode == "multiply":
+                        rgb = pcs.get("multiply_rgb", (220, 230, 255))
+                        # support "match" -> use box_bg's RGB
+                        if isinstance(rgb, str) and rgb.lower() == "match":
+                            rgb = tuple(getattr(self.theme, "box_bg", (0, 0, 0, 255))[:3])
+                        over = pygame.Surface(rect.size, pygame.SRCALPHA)
+                        over.fill((*rgb, 255))  # alpha ignored by MULT
+                        mask = pygame.Surface(rect.size, pygame.SRCALPHA)
+                        pygame.draw.rect(mask, (255, 255, 255, 255), mask.get_rect(),
+                                        border_radius=max(0, self.theme.border_radius - 6))
+                        over.blit(mask, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
+                        layer.blit(over, rect.topleft, special_flags=pygame.BLEND_RGBA_MULT)
+                    else:
+                        bg = pcs.get("bg_rgba", None)
+                        if isinstance(bg, str) and bg.lower() == "match":
+                            bg = getattr(self.theme, "box_bg", (10, 10, 10, 170))  # match panel RGBA
+                        if bg:
+                            pygame.draw.rect(
+                                layer, bg, rect,
+                                border_radius=max(0, self.theme.border_radius - 6)
+                            )
+                            
+                    # Left bar (same as before)
+                    lbw = int(pcs.get("left_bar_w", 0))
+                    lbrgb = pcs.get("left_bar_rgb", None)
+                    if lbw > 0 and lbrgb:
+                        bar = pygame.Rect(rect.x, rect.y, lbw, rect.h)
+                        pygame.draw.rect(layer, lbrgb, bar, border_radius=0)
+            
             for j, surf in enumerate(lay.surfaces):
                 h = surf.get_height()
 
                 # bookmark ▼ position for the last line of the last visible entry
                 if e.wait_for_input and e.t >= e.duration - 1e-4 \
                    and j == len(lay.surfaces) - 1 and idx_entry == len(entries) - 1:
-                    indicator_pos = (viewport.x + surf.get_width(), y + offset, h)
+                    indicator_pos = (x_base + surf.get_width(), y + offset + text_dy, h)
 
                 if y + h + offset >= viewport.y and y + offset <= viewport.bottom:
-                    prev_alpha = surf.get_alpha()
-                    surf.set_alpha(alpha)
-                    layer.blit(surf, (viewport.x, y + offset))
-                    surf.set_alpha(prev_alpha)
+                    if is_typing:
+                        # Determine how many chars of this wrapped line are visible
+                        line_len = len(lay.lines[j])
+                        show_in_line = max(0, min(line_len, chars_to_show))
+                        if show_in_line > 0:
+                            w_clip = lay.prefix_w[j][show_in_line]
+                            prev_alpha = surf.get_alpha()
+                            surf.set_alpha(alpha)
+                            layer.blit(surf, (x_base, y + offset + text_dy), area=pygame.Rect(0, 0, w_clip, h))
+                            surf.set_alpha(prev_alpha)
+                        # Consume budget for next lines in this entry
+                        chars_to_show = max(0, chars_to_show - line_len)
+                    else:
+                        prev_alpha = surf.get_alpha()
+                        surf.set_alpha(alpha)
+                        layer.blit(surf, (x_base, y + offset + text_dy))
+                        surf.set_alpha(prev_alpha)
 
                 y += h
                 if j < len(lay.surfaces) - 1:
@@ -190,11 +274,73 @@ class TextView:
         layer.set_clip(prev_clip)
 
     # --------- internals ---------
-    def _layout_entry(self, e: Entry, wrap_w: int) -> _Layout:
-        surfaces, height = self.layout.layout(e.text or "", wrap_w)
-        return _Layout(surfaces, height)
+    def _layout_entry(self, e: Entry, wrap_w: int) -> _Layout:        
+        # Wrap, render, and precompute prefix widths for fast typewriter clipping
+        lines = self.layout.wrap(e.text or "", wrap_w)
+        # If this is a player-choice line, wrap to (viewpoint - indent)
+        indent = 0
+        if getattr(e, "is_player_choice", False):
+            pcs = self._get_player_choice_style()
+            indent = int(pcs.get("indent_px", 0))
+        effective_w = max(0, wrap_w - max(0, indent))
+        lines = self.layout.wrap(e.text or "", effective_w)
+        
+        surfaces, height = self.layout.render_lines(lines)
+        measure = self.layout.font.size
+        
+        prefix_w: List[List[int]] = []
+        for s in lines:
+            widths = [0]
+            for i in range(1, len(s) + 1):
+                widths.append(measure(s[:i])[0])
+            prefix_w.append(widths)
+        
+        total_chars = sum(len(s) for s in lines)
+        
+        # Optional per-entry tint (for player choice)
+        if getattr(e, "is_player_choice", False):
+            pcs = self._get_player_choice_style()
+            tint = pcs.get("text_tint_rgb", None)
+            if tint:
+                r, g, b = [int(x) for x in tint]
+                tinted = []
+                for s in surfaces:
+                    if s is None: continue
+                    cpy = s.copy()
+                    # Multiply only RGB; keep alpha
+                    mul = pygame.Surface(cpy.get_size(), pygame.SRCALPHA)
+                    mul.fill((r, g, b, 255))
+                    cpy.blit(mul, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
+                    tinted.append(cpy)
+                surfaces = tinted
+                    
+        return _Layout(surfaces, height, lines, prefix_w, total_chars)
 
     # ---------- wait indicator ----------
+    def _get_player_choice_style(self) -> dict:
+        defaults = {
+            "enabled": True,
+            "prefix": "You: ",                      # Used by presenter when inserting the line
+            "bg_rgba": (120, 160, 240, 32),         # Soft highlight behind the line(s)
+            "left_bar_rgb": (140, 180, 255),        # Colored bar at the left
+            "left_bar_w": 3,
+            "pad_x": 6,
+            "pad_y": 2,
+            "text_tint_rgb": None,                  # e.g. (210, 230, 255) to slightly recolor text
+            "indent_px": 0,
+            "text_offset_y": 0,
+            "blend": "alpha",
+            "multiply_rgb": (220, 230, 255),
+        }
+        pc = getattr(self.theme, "player_choice", None)
+        if isinstance(pc, dict):
+            for k in defaults:
+                if k in pc: defaults[k] = pc[k]
+        elif pc is not None:
+            for k in defaults:
+                if hasattr(pc, k): defaults[k] = getattr(pc, k)
+        return defaults
+        
     def _get_wait_style(self) -> dict:
         defaults = {
             "enabled": True,
