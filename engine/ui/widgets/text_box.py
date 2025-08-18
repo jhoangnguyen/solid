@@ -204,6 +204,7 @@ class TextBox:
         self.choices.set_hover_index(idx)
     
     def choice_click(self, window_pos: tuple[int, int]) -> int | None:
+        print("[TextBox.choice_click] choice was made")
         if not self.choices.active():
             return None
 

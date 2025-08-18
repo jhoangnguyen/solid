@@ -23,7 +23,7 @@ textbox:
 
 presenter:
   clear_after_nodes: 50          # 0 or null = clear every nodes (legacy). N > 0 = Keep N nodes before clearing
-  insert_node_separtor: true    # Add a blank line between nodes when not clearing
+  insert_node_separator: true    # Add a blank line between nodes when not clearing
   separator_text: ""            # Or "-" if visual divider
 
 reveal:
@@ -78,10 +78,14 @@ theme:
   padding: [14, 14, 14, 14] # t, r, b, l
 
   # Extra pixels between wrapped lines (does not affect paragraph spacing; see entry_gap).
-  line_spacing: 4
+  line_spacing: 3
 
   # Pixels between entries (e.g., lines of dialogue) in the flow. Think paragraph spacing.
-  entry_gap: 6
+  entry_gap: 18
+
+  choice_blur_scale: 0.25      # 0.20–0.35 = stronger blur
+  choice_blur_passes: 1        # 1–2
+  choice_tint_rgba: [0, 0, 0, 96]  # darken a bit over the blur for readability
 
   scrollbar:
     # Width (pixels) of the scrollbar thumb.
@@ -137,6 +141,23 @@ theme:
     # Optional: vertical alignment of the indicator relative to the text line.
     # "baseline" places it on the text baseline, "bottom" anchors to the line box bottom.
     # align: baseline  # (baseline | bottom)
+
+  player_choice:
+    prefix: "You: "
+    # bg_rgba: [120, 160, 240, 32]   # translucent highlight
+    bg_rgba: null
+    # left_bar_rgb: [140, 180, 255]  # accent bar
+    left_bar_rgb: [204, 177, 133]
+    left_bar_w: 3
+    pad_x: 6
+    pad_y: 6
+    indent_px: 16
+    text_offset_y: 3
+    text_tint_rgb: [204, 177, 133]  # uncomment to tint the text itself
+
+    blend: multiply            # "alpha" (default) or "multiply"
+    # multiply_rgb: [220, 230, 255]   # tint used for multiply mode (alpha ignored)
+    multiply_rgb: [230, 230, 230]   # neutral gray; try 224–236 to taste
 
 backgrounds:
   # Background image layers. “window” fills the full window; “textbox” fills the textbox panel.

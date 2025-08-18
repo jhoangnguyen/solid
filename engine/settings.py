@@ -100,16 +100,21 @@ def build_theme_from_defaults(defaults: Dict[str, Any]) -> Theme:
     tdata = defaults.get("theme", {}) or {}
     th = Theme()
     
-     # core
-    th.font_path     = tdata.get("font_path", th.font_path)
-    th.font_size     = int(tdata.get("font_size", th.font_size))
-    th.text_rgb      = tuple(tdata.get("text_rgb", th.text_rgb))
-    th.box_bg        = tuple(tdata.get("box_bg", getattr(th, "box_bg", (10,10,10,170))))
-    th.box_border    = tuple(tdata.get("box_border", getattr(th, "box_border", (255,255,255,160))))
-    th.border_radius = int(tdata.get("border_radius", th.border_radius))
-    th.padding       = tuple(tdata.get("padding", th.padding))
-    th.line_spacing  = int(tdata.get("line_spacing", th.line_spacing))
-    th.entry_gap     = int(tdata.get("entry_gap", getattr(th, "entry_gap", 6)))
+    # core
+    th.font_path            = tdata.get("font_path", th.font_path)
+    th.font_size            = int(tdata.get("font_size", th.font_size))
+    th.text_rgb             = tuple(tdata.get("text_rgb", th.text_rgb))
+    th.box_bg               = tuple(tdata.get("box_bg", getattr(th, "box_bg", (10,10,10,170))))
+    th.box_border           = tuple(tdata.get("box_border", getattr(th, "box_border", (255,255,255,160))))
+    th.border_radius        = int(tdata.get("border_radius", th.border_radius))
+    th.padding              = tuple(tdata.get("padding", th.padding))
+    th.line_spacing         = int(tdata.get("line_spacing", th.line_spacing))
+    th.entry_gap            = int(tdata.get("entry_gap", getattr(th, "entry_gap", 6)))
+    th.choice_blur_scale    = float(tdata.get("choice_blur_scale", getattr(th, "choice_blur_scale", 0.25)))      # 0.20–0.35 = stronger blur
+    th.choice_blur_passes   = int(tdata.get("choice_blur_passes", getattr(th, "choice_blur_passes", 1)))        # 1–2
+    ct = tdata.get("choice_tint_rgba", getattr(th, "choice_tint_rgba", (0, 0, 0, 96)))
+    ct = tuple(ct) if ct is not None else None
+    setattr(th, "choice_tint_rgba", ct)
 
     # scrollbar
     sc = tdata.get("scrollbar", {}) or {}
@@ -144,6 +149,56 @@ def build_theme_from_defaults(defaults: Dict[str, Any]) -> Theme:
     th.wait_indicator.offset_y  = int(wi.get("offset_y", th.wait_indicator.offset_y))
     th.wait_indicator.scale     = float(wi.get("scale", th.wait_indicator.scale))
     th.wait_indicator.font_path = wi.get("font_path", th.wait_indicator.font_path)
+    
+    # optional alignment
+    if "align" in wi:
+        setattr(th.wait_indicator, "align", wi.get("align"))
+
+    # --- player_choice style (dict attached to Theme) ---
+    pc_yaml = tdata.get("player_choice", {}) or {}
+    pc_defaults = {
+        "prefix": "You: ",
+        "bg_rgba": (120, 160, 240, 32),
+        "left_bar_rgb": (140, 180, 255),
+        "left_bar_w": 3,
+        "pad_x": 6,
+        "pad_y": 2,
+        "text_tint_rgb": None,
+        "indent_px": 0,
+        "text_offset_y": 0,
+        "blend": "alpha",
+        "multiply_rgb": (220, 230, 255),
+    }
+    pc = dict(pc_defaults)
+    pc.update(pc_yaml)
+
+    def _norm_rgba(v):
+        if v is None:
+            return None
+        if isinstance(v, str):         # keep sentinel like "match"
+            return v
+        return tuple(v)
+
+    def _norm_rgb(v):
+        if v is None:
+            return None
+        if isinstance(v, str):         # keep sentinel like "match"
+            return v
+        return tuple(v)
+
+    # normalize
+    pc["bg_rgba"]       = _norm_rgba(pc.get("bg_rgba"))
+    pc["left_bar_rgb"]  = _norm_rgb(pc.get("left_bar_rgb"))
+    pc["text_tint_rgb"] = _norm_rgb(pc.get("text_tint_rgb"))
+    pc["left_bar_w"]    = int(pc.get("left_bar_w", 3))
+    pc["pad_x"]         = int(pc.get("pad_x", 6))
+    pc["pad_y"]         = int(pc.get("pad_y", 2))
+    pc["indent_px"]     = int(pc.get("indent_px", 0))
+    pc["text_offset_y"] = int(pc.get("text_offset_y", 0))
+    pc["blend"]         = str(pc.get("blend", "alpha"))
+    pc["multiply_rgb"]  = _norm_rgb(pc.get("multiply_rgb"))
+
+    setattr(th, "player_choice", pc)
     return th
 
 def textbox_fracs_from_defaults(defaults: Dict[str, Any], fallback: Tuple[float, float]) -> Tuple[float, float]:

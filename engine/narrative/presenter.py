@@ -101,24 +101,6 @@ class NodePresenter:
                 self.bg.clear("textbox")
 
         self.tb.hide_choice_box()
-        # self._maybe_clear_for_node()
-        # self.tb.set_follow_bottom(True)
-
-        # # say block (queued as line-by-line, waiting for input)
-        # self.tb.model.queue_lines(node.say, wait_for_input=True)
-
-        # # Prepare the choices block (rendered later as an overlay)
-        # if node.choices:
-        #     # self._prepared = [""] + lines  # optional spacer line at top
-        #     self._prepared = [f"> {(c.text or c.id)}{(' [WIP]' if c.goto is None else '')}" for c in node.choices]
-        #     self._choices = list(node.choices)
-        #     self._shown = False
-        # else:
-        #     self._prepared = None
-        #     self._choices = None
-        #     self._shown = True
-
-        # self.tb.scroll_to_bottom()
         
         # Sliding-window management
         # 0 => keep only current node: clear all prior content now
@@ -172,6 +154,21 @@ class NodePresenter:
         ch = self._choices[idx]
         if not ch.goto:
             return # WIP choice
+        # Insert the player's selected choice into the transcript
+        # Prefix from theme (fallback "You: ")
+        pc = getattr(self.tb.theme, "player_choice", None)
+        prefix = "You: "
+        if isinstance(pc, dict):
+            prefix = str(pc.get("prefix", prefix))
+        elif pc is not None and hasattr(pc, "prefix"):
+            prefix = str(pc.prefix)
+        chosen_text = f"{prefix}{(ch.text or ch.id)}"
+        self.tb.model.append_player_choice(chosen_text, animated=False)
+        # Count this with the current node so it trims together
+        if hasattr(self, "_node_sizes") and self._node_sizes:
+            self._node_sizes[-1] += 1
+        self.tb.scroll_to_bottom()
+            
         next_node = self.story.nodes.get(ch.goto)
         if next_node:
             self.show_node(next_node)

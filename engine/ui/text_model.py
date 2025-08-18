@@ -28,6 +28,8 @@ class Entry:
     visible: bool = False
     wait_for_input: bool = False                # if True, only released on press
     cm_reveal: Optional[List[float]] = None     # Cumulative reveal fraction of total duration when the i-th visible char becomes visible
+    
+    is_player_choice: bool = False
 
 class TextModel:
     """
@@ -76,6 +78,16 @@ class TextModel:
             e.visible = True
             e.t = 0.0
             self._visible.append(e)
+            
+    def append_player_choice(self, line: str, animated: bool = False) -> None:
+        """
+        Append a single line immediately, tagged as as player-selected choice.
+        """
+        e = self._make_entry(line, animated=animated, wait=False)
+        e.visible = True
+        e.is_player_choice = True
+        e.t = 0.0
+        self._visible.append(e)
             
     def trim_oldest_entries(self, n: int) -> int:
         """

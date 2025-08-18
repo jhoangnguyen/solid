@@ -24,6 +24,7 @@ class GameApp:
         # Load default settings
         defaults = load_ui_defaults("game/config/defaults.yaml")
         self.theme = build_theme_from_defaults(defaults)
+        print("player_choice:", getattr(self.theme, "player_choice", {}))
         
         # --- Textbox ---
         wfrac, hfrac = textbox_fracs_from_defaults(defaults, (cfg.textbox.width_frac, cfg.textbox.height_frac))
