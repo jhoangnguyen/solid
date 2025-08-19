@@ -1,4 +1,5 @@
 from dataclasses import dataclass, replace, field
+from typing import Optional
 import pygame
 
 @dataclass
@@ -40,6 +41,9 @@ class Theme:
     scrollbar: ScrollbarStyle = field(default_factory=ScrollbarStyle)
     entry_gap: int = 8
     wait_indicator: WaitIndicatorStyle = field(default_factory=WaitIndicatorStyle)
+    choice_blur_scale: float = 0.25      # 0.20–0.35 = stronger blur
+    choice_blur_passes: int = 1        # 1–2
+    choice_tint_rgba: Optional[tuple[int, int, int, int]] = (0, 0, 0, 96)  # darken a bit over the blur for readability
     
     def derive(self, **overrides) -> "Theme":
         """ Create a variant theme (e.g., per screen) without mutating the base. """

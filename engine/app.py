@@ -1,13 +1,15 @@
 import pygame
 from dataclasses import dataclass
+from engine.ui.fonts import FontCache
 from engine.ui.style import Theme, StyleContext, compute_centered_rect, WaitIndicatorStyle
 from engine.ui.widgets.text_box import TextBox, RevealParams
 from engine.ui.anim import Animator, Tween
-from engine.settings import load_settings, AppCfg, load_ui_defaults, build_theme_from_defaults, textbox_fracs_from_defaults, reveal_overrides_from_defaults
+from engine.settings import load_settings, AppCfg, load_ui_defaults, build_theme_from_defaults, textbox_fracs_from_defaults, reveal_overrides_from_defaults, presenter_overrides_from_defaults
 from engine.narrative.loader import load_story_file
 from engine.narrative.presenter import NodePresenter
-from engine.ui.brushes.image_brush import ImageBrush
 from engine.ui.background_manager import BackgroundManager
+from engine.ui.widgets.bottom_bar import BottomBar, BottomBarButton
+
 
 class GameApp:
     def __init__(self, cfg: AppCfg):
@@ -19,11 +21,15 @@ class GameApp:
         
         # Set window size and title
         pygame.display.set_caption(cfg.window.title)
-        self.screen = pygame.display.set_mode((cfg.window.width, cfg.window.height), pygame.RESIZABLE)
+        self.screen = pygame.display.set_mode((cfg.window.width, cfg.window.height), flags=pygame.RESIZABLE | pygame.SCALED | pygame.DOUBLEBUF)
         
         # Load default settings
         defaults = load_ui_defaults("game/config/defaults.yaml")
-        self.theme = build_theme_from_defaults(defaults)
+        self.theme : Theme = build_theme_from_defaults(defaults)
+        print("player_choice:", getattr(self.theme, "player_choice", {}))
+        
+        self.fonts = FontCache()
+
         
         # --- Textbox ---
         wfrac, hfrac = textbox_fracs_from_defaults(defaults, (cfg.textbox.width_frac, cfg.textbox.height_frac))
@@ -69,11 +75,36 @@ class GameApp:
 
         # --- Node Presenter --- 
         # Loads each node in .yaml files along with the background
-        self.presenter = NodePresenter(self.textbox, self.story, bg_manager=self.bg)
+        pr = presenter_overrides_from_defaults(defaults)
+        self.presenter = NodePresenter(
+            self.textbox, 
+            self.story, 
+            bg_manager=self.bg,
+            clear_after_nodes=pr.get("clear_after_nodes"),            # Keep N nodes, clear on the N + 1th
+            insert_node_separator=pr["insert_node_separator"],     # Blank line between nodes
+            separator_text=pr["separator_text"],               # Customize if desired, e.g. "-"
+            )
         self.presenter.show_node(self.story.nodes[self.current_node_id])
         
         self.hud_font = pygame.font.Font(None, 24)
+
         
+        self.bottom_bar = BottomBar(self.theme, width_frac=0.92, height_frac=0.18, margin_px=10)
+        self.bottom_bar.set_slots({
+            # left six (top row: 1–3, bottom row: 4–6)
+            "left_1": BottomBarButton("left_1", "Objectives"),
+            "left_4": BottomBarButton("left_4", "Inventory"),
+            # Fill the rest later:
+            # "left_2": BottomBarButton("left_2", "Party"),
+            # "left_3": BottomBarButton("left_3", "Quests"),
+            # "left_5": BottomBarButton("left_5", "Skills"),
+            # "left_6": BottomBarButton("left_6", "Codex"),
+
+            # right stack (top→bottom)
+            "right_2": BottomBarButton("right_2", "MAP"),
+        })
+
+                
     def handle_input(self):
         for e in pygame.event.get():
             if e.type == pygame.QUIT:
@@ -139,8 +170,12 @@ class GameApp:
     def draw(self):
         self.bg.draw(self.screen, self.screen.get_rect())
         self.textbox.draw(self.screen)
+        self.screen.set_clip(None)
+
         fps = int(self.clock.get_fps())
+
         hud = self.hud_font.render(f"{fps} FPS", True, (180, 180, 180))
+        self.bottom_bar.draw(self.screen)
         self.screen.blit(hud, (8, 6))
         pygame.display.flip()
         

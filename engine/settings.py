@@ -32,6 +32,10 @@ class RevealCfg:
     intro_duration: float = 0.18            # Fade/slide duration for each line
     intro_offset_px: int = 10               # How many pixels the new line slides up from
     stick_to_bottom_threshold_px: int = 24  # If user is within threshoild from the bottom, keep scrolling
+    chars_per_sec: float = 45.0             # Float for char rate
+    pause_short_s: float = 0.06             # , ; :
+    pause_long_s: float = 0.25              # . ! ?
+    pause_ellipsis_s: float = 0.35          # "..."
     
     
 @dataclass
@@ -79,6 +83,10 @@ def load_settings(path: str = "game/config/defaults.yaml") -> AppCfg:
             intro_duration=float(_get(data, "ui.textbox.reveal.intro_duration", 0.18)),
             intro_offset_px=float(_get(data, "ui.textbox.reveal.intro_offset_px", 10)),
             stick_to_bottom_threshold_px=float(_get(data, "ui.textbox.reveal.stick_to_bottom_threshold_px", 24)),
+            chars_per_sec=float(_get(data, "ui.textbox.reveal.chars_per_sec", 45.0)),
+            pause_short_s=float(_get(data, "ui.textbox.reveal.pause_short_s", 0.06)),
+            pause_long_s=float(_get(data, "ui.textbox.reveal.pause_long_s", 0.25)),
+            pause_ellipsis_s=float(_get(data, "ui.textbox.reveal.pause_ellipsis_s", 0.35)),
         ),
     )
     
@@ -92,16 +100,21 @@ def build_theme_from_defaults(defaults: Dict[str, Any]) -> Theme:
     tdata = defaults.get("theme", {}) or {}
     th = Theme()
     
-     # core
-    th.font_path     = tdata.get("font_path", th.font_path)
-    th.font_size     = int(tdata.get("font_size", th.font_size))
-    th.text_rgb      = tuple(tdata.get("text_rgb", th.text_rgb))
-    th.box_bg        = tuple(tdata.get("box_bg", getattr(th, "box_bg", (10,10,10,170))))
-    th.box_border    = tuple(tdata.get("box_border", getattr(th, "box_border", (255,255,255,160))))
-    th.border_radius = int(tdata.get("border_radius", th.border_radius))
-    th.padding       = tuple(tdata.get("padding", th.padding))
-    th.line_spacing  = int(tdata.get("line_spacing", th.line_spacing))
-    th.entry_gap     = int(tdata.get("entry_gap", getattr(th, "entry_gap", 6)))
+    # core
+    th.font_path            = tdata.get("font_path", th.font_path)
+    th.font_size            = int(tdata.get("font_size", th.font_size))
+    th.text_rgb             = tuple(tdata.get("text_rgb", th.text_rgb))
+    th.box_bg               = tuple(tdata.get("box_bg", getattr(th, "box_bg", (10,10,10,170))))
+    th.box_border           = tuple(tdata.get("box_border", getattr(th, "box_border", (255,255,255,160))))
+    th.border_radius        = int(tdata.get("border_radius", th.border_radius))
+    th.padding              = tuple(tdata.get("padding", th.padding))
+    th.line_spacing         = int(tdata.get("line_spacing", th.line_spacing))
+    th.entry_gap            = int(tdata.get("entry_gap", getattr(th, "entry_gap", 6)))
+    th.choice_blur_scale    = float(tdata.get("choice_blur_scale", getattr(th, "choice_blur_scale", 0.25)))      # 0.20–0.35 = stronger blur
+    th.choice_blur_passes   = int(tdata.get("choice_blur_passes", getattr(th, "choice_blur_passes", 1)))        # 1–2
+    ct = tdata.get("choice_tint_rgba", getattr(th, "choice_tint_rgba", (0, 0, 0, 96)))
+    ct = tuple(ct) if ct is not None else None
+    setattr(th, "choice_tint_rgba", ct)
 
     # scrollbar
     sc = tdata.get("scrollbar", {}) or {}
@@ -136,6 +149,80 @@ def build_theme_from_defaults(defaults: Dict[str, Any]) -> Theme:
     th.wait_indicator.offset_y  = int(wi.get("offset_y", th.wait_indicator.offset_y))
     th.wait_indicator.scale     = float(wi.get("scale", th.wait_indicator.scale))
     th.wait_indicator.font_path = wi.get("font_path", th.wait_indicator.font_path)
+    
+    # optional alignment
+    if "align" in wi:
+        setattr(th.wait_indicator, "align", wi.get("align"))
+
+    # --- player_choice style (dict attached to Theme) ---
+    pc_yaml = tdata.get("player_choice", {}) or {}
+    pc_defaults = {
+        "prefix": "You: ",
+        "bg_rgba": (120, 160, 240, 32),
+        "left_bar_rgb": (140, 180, 255),
+        "left_bar_w": 3,
+        "pad_x": 6,
+        "pad_y": 2,
+        "text_tint_rgb": None,
+        "indent_px": 0,
+        "text_offset_y": 0,
+        "blend": "alpha",
+        "multiply_rgb": (220, 230, 255),
+    }
+    pc = dict(pc_defaults)
+    pc.update(pc_yaml)
+
+    def _norm_rgba(v):
+        if v is None:
+            return None
+        if isinstance(v, str):         # keep sentinel like "match"
+            return v
+        return tuple(v)
+
+    def _norm_rgb(v):
+        if v is None:
+            return None
+        if isinstance(v, str):         # keep sentinel like "match"
+            return v
+        return tuple(v)
+
+    # normalize
+    pc["bg_rgba"]       = _norm_rgba(pc.get("bg_rgba"))
+    pc["left_bar_rgb"]  = _norm_rgb(pc.get("left_bar_rgb"))
+    pc["text_tint_rgb"] = _norm_rgb(pc.get("text_tint_rgb"))
+    pc["left_bar_w"]    = int(pc.get("left_bar_w", 3))
+    pc["pad_x"]         = int(pc.get("pad_x", 6))
+    pc["pad_y"]         = int(pc.get("pad_y", 2))
+    pc["indent_px"]     = int(pc.get("indent_px", 0))
+    pc["text_offset_y"] = int(pc.get("text_offset_y", 0))
+    pc["blend"]         = str(pc.get("blend", "alpha"))
+    pc["multiply_rgb"]  = _norm_rgb(pc.get("multiply_rgb"))
+
+    setattr(th, "player_choice", pc)
+    
+    bb_yaml = tdata.get("bottom_bar", {}) or {}
+    btn_yaml = bb_yaml.get("button", {}) or {}
+    bb = {
+        "height": int(bb_yaml.get("height", 72)),
+        "radius": int(bb_yaml.get("radius", 12)),
+        "padding": tuple(bb_yaml.get("padding", (10,16,10,16))),
+        "gap": int(bb_yaml.get("gap", 12)),
+        "bg_rgba": tuple(bb_yaml.get("bg_rgba", (10,10,10,170))),
+        "border_rgba": tuple(bb_yaml.get("border_rgba", (255,255,255,60))),
+        "button": {
+            "h": int(btn_yaml.get("h", 44)),
+            "pad_x": int(btn_yaml.get("pad_x", 14)),
+            "radius": int(btn_yaml.get("radius", 10)),
+            "text_size": int(btn_yaml.get("text_size", 18)),
+            "text_rgb": tuple(btn_yaml.get("text_rgb", (235,235,235))),
+            "fill_rgba": tuple(btn_yaml.get("fill_rgba", (30,30,35,220))),
+            "hover_rgba": tuple(btn_yaml.get("hover_rgba", (50,50,60,240))),
+            "down_rgba": tuple(btn_yaml.get("down_rgba", (70,70,80,255))),
+            "border_rgba": tuple(btn_yaml.get("border_rgba", (255,255,255,60))),
+            "border_px": int(btn_yaml.get("border_px", 1)),
+        }
+    }
+    setattr(th, "bottom_bar", bb)
     return th
 
 def textbox_fracs_from_defaults(defaults: Dict[str, Any], fallback: Tuple[float, float]) -> Tuple[float, float]:
@@ -152,4 +239,16 @@ def reveal_overrides_from_defaults(defaults: Dict[str, Any]) -> dict:
         "intro_duration": float(rv.get("intro_duration", 0.18)),
         "intro_offset_px": int(rv.get("intro_offset_px", 10)),
         "stick_to_bottom_threshold_px": int(rv.get("stick_to_bottom_threshold_px", 24)),
+        "chars_per_sec": float(rv.get("chars_per_sec", 45.0)),
+        "pause_short_s": float(rv.get("pause_short_s", 0.06)),
+        "pause_long_s": float(rv.get("pause_long_s", 0.25)),
+        "pause_ellipsis_s": float(rv.get("pause_ellipsis_s", 0.35)),
+    }
+    
+def presenter_overrides_from_defaults(defaults: Dict[str, Any]) -> dict:
+    pr = defaults.get("presenter", {}) or {}
+    return {
+        "clear_after_nodes": int(pr.get("clear_after_nodes", 0)),
+        "insert_node_separator": bool(pr.get("insert_node_separator", True)),
+        "separator_text": str(pr.get("separator_text", "")),
     }
