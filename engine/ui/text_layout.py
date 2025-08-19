@@ -119,7 +119,7 @@ class TextLayout:
         total_h = sum(heights) + (len(surfaces) - 1) * max(0, line_spacing)
         return surfaces, total_h
         
-    def measure_wrapped(self, raw_text: str, wrap_w: int, line_spacing: int, fonts: FontCache, key: FontCache) -> Tuple[List[int], int]:
+    def measure_wrapped(self, raw_text: str, wrap_w: int, line_spacing: int, fonts: FontCache, key: FontKey) -> Tuple[List[int], int]:
         """ Return [line_heights,...] + total height (no renders). """
         lines = self.wrap_lines(raw_text, wrap_w, fonts, key)
         # Fast measure via a representative glyph (height), using font.get_height()

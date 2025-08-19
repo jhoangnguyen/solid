@@ -24,17 +24,18 @@ class GameApp:
         self.screen = pygame.display.set_mode((cfg.window.width, cfg.window.height), flags=pygame.RESIZABLE | pygame.SCALED | pygame.DOUBLEBUF)
         
         # Load default settings
-        defaults = load_ui_defaults("game/config/defaults.yaml")
-        self.theme : Theme = build_theme_from_defaults(defaults)
+        self.defaults = load_ui_defaults("game/config/defaults.yaml")
+        self.theme : Theme = build_theme_from_defaults(self.defaults)
         print("player_choice:", getattr(self.theme, "player_choice", {}))
         
         self.fonts = FontCache()
 
         
         # --- Textbox ---
-        wfrac, hfrac = textbox_fracs_from_defaults(defaults, (cfg.textbox.width_frac, cfg.textbox.height_frac))
+        wfrac, hfrac = textbox_fracs_from_defaults(self.defaults, (cfg.textbox.width_frac, cfg.textbox.height_frac))
+        self._tb_fracs = (wfrac, hfrac)
         tb_rect = compute_centered_rect(self.screen, wfrac, hfrac)
-        rv = reveal_overrides_from_defaults(defaults)
+        rv = reveal_overrides_from_defaults(self.defaults)
         self.textbox = TextBox(tb_rect, self.theme, reveal=RevealParams(**rv))
         
         self.clock = pygame.time.Clock()
@@ -54,8 +55,8 @@ class GameApp:
         
         # Seed initial background from defaults.yaml if present; otherwise fall back to the old fireplace.
         try:
-            defaults = load_ui_defaults("game/config/defaults.yaml")
-            win_bg = (defaults.get("backgrounds", {}) or {}).get("window", {}) or {}
+            # defaults = load_ui_defaults("game/config/defaults.yaml")
+            win_bg = (self.defaults.get("backgrounds", {}) or {}).get("window", {}) or {}
             if win_bg:
             # accept dict spec straight from YAML
                 self.bg.set(win_bg, transition="cut")
@@ -66,16 +67,16 @@ class GameApp:
                 "tint_rgba": (0, 0, 0, 64),
                 }, transition="cut")
         except Exception:
-                # Safe fallback if defaults.yaml isn’t available
-                self.bg.set({
-                "image_path": "game/assets/backgrounds/stock_fireplace.jpg",
-                "mode": "cover",
-                "tint_rgba": (0, 0, 0, 64),
-                }, transition="cut")
+            # Safe fallback if defaults.yaml isn’t available
+            self.bg.set({
+            "image_path": "game/assets/backgrounds/stock_fireplace.jpg",
+            "mode": "cover",
+            "tint_rgba": (0, 0, 0, 64),
+            }, transition="cut")
 
         # --- Node Presenter --- 
         # Loads each node in .yaml files along with the background
-        pr = presenter_overrides_from_defaults(defaults)
+        pr = presenter_overrides_from_defaults(self.defaults)
         self.presenter = NodePresenter(
             self.textbox, 
             self.story, 
@@ -158,6 +159,7 @@ class GameApp:
                 self.textbox.scroll(-e.y * self.cfg.input.scroll_wheel_pixels)
             elif e.type == pygame.VIDEORESIZE:
                 self.screen = pygame.display.set_mode((e.w, e.h), pygame.RESIZABLE)
+                wfrac, hfrac = self._tb_fracs
                 self.textbox.on_resize(compute_centered_rect(self.screen, self.cfg.textbox.width_frac, self.cfg.textbox.height_frac))
                 
     def update(self, dt: float):
