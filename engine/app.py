@@ -94,7 +94,7 @@ class GameApp:
         self.bottom_bar.set_slots({
             # left six (top row: 1–3, bottom row: 4–6)
             "left_1": BottomBarButton("left_1", "Objectives"),
-            "left_4": BottomBarButton("left_4", "Inventory"),
+            "left_4": BottomBarButton("left_4", "Calendar"),
             # Fill the rest later:
             # "left_2": BottomBarButton("left_2", "Party"),
             # "left_3": BottomBarButton("left_3", "Quests"),
@@ -102,7 +102,9 @@ class GameApp:
             # "left_6": BottomBarButton("left_6", "Codex"),
 
             # right stack (top→bottom)
-            "right_2": BottomBarButton("right_2", "MAP"),
+            "right_1": BottomBarButton("right_1", "MAP"),
+            "right_2": BottomBarButton("right_2", "Inventory"),
+            "right_3": BottomBarButton("right_3", "Settings"),
         })
 
     def handle_input(self):
@@ -186,7 +188,7 @@ class GameApp:
         fps = int(self.clock.get_fps())
 
         hud = self.hud_font.render(f"{fps} FPS", True, (180, 180, 180))
-        self.bottom_bar.draw(self.screen)
+        # self.bottom_bar.draw(self.screen)
         self.screen.blit(hud, (8, 6))
         pygame.display.flip()
         
