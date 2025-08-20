@@ -115,6 +115,9 @@ def build_theme_from_defaults(defaults: Dict[str, Any]) -> Theme:
     ct = tdata.get("choice_tint_rgba", getattr(th, "choice_tint_rgba", (0, 0, 0, 96)))
     ct = tuple(ct) if ct is not None else None
     setattr(th, "choice_tint_rgba", ct)
+    setattr(th, "max_font_px", int(tdata.get("max_font_px", 0)) or None)
+    setattr(th, "font_max_mult", float(tdata.get("font_max_mult", 0.0)) or None)
+    setattr(th, "font_max_frac_of_tb", float(tdata.get("font_max_frac_of_tb", 0.0)) or None)
 
     # scrollbar
     sc = tdata.get("scrollbar", {}) or {}
@@ -200,6 +203,7 @@ def build_theme_from_defaults(defaults: Dict[str, Any]) -> Theme:
 
     setattr(th, "player_choice", pc)
     
+    # -- BOTTOM BAR ---
     bb_yaml = tdata.get("bottom_bar", {}) or {}
     btn_yaml = bb_yaml.get("button", {}) or {}
 
@@ -227,6 +231,24 @@ def build_theme_from_defaults(defaults: Dict[str, Any]) -> Theme:
     b.text_size_frac = float(btn_yaml.get("text_size_frac", b.text_size_frac)) if btn_yaml.get("text_size_frac", None) is not None else b.text_size_frac
     b.radius_frac    = float(btn_yaml.get("radius_frac", b.radius_frac)) if btn_yaml.get("radius_frac", None) is not None else b.radius_frac
     b.border_px_frac = float(btn_yaml.get("border_px_frac", b.border_px_frac)) if btn_yaml.get("border_px_frac", None) is not None else b.border_px_frac
+    
+    # --- TOP ICONS ---
+    ti = tdata.get("top_icons", {}) or {}
+    th.top_icons.size_px     = int(ti.get("size_px", th.top_icons.size_px))
+    th.top_icons.margin_px   = int(ti.get("margin_px", th.top_icons.margin_px))
+    th.top_icons.gap_px      = int(ti.get("gap_px", th.top_icons.gap_px))
+    th.top_icons.ring_rgba   = tuple(ti.get("ring_rgba", th.top_icons.ring_rgba))
+    th.top_icons.ring_px     = int(ti.get("ring_px", th.top_icons.ring_px))
+    th.top_icons.hover_tint_rgba = tuple(ti.get("hover_tint_rgba", th.top_icons.hover_tint_rgba))
+    th.top_icons.down_tint_rgba  = tuple(ti.get("down_tint_rgba", th.top_icons.down_tint_rgba))
+    th.top_icons.corner_radius   = int(ti.get("corner_radius", th.top_icons.corner_radius))
+    
+    if "size_frac" in ti:   th.top_icons.size_frac   = float(ti["size_frac"])
+    if "margin_frac" in ti: th.top_icons.margin_frac = float(ti["margin_frac"])
+    if "gap_frac" in ti:    th.top_icons.gap_frac    = float(ti["gap_frac"])
+    if "ring_px_frac" in ti: th.top_icons.ring_px_frac = float(ti["ring_px_frac"])
+    if "corner_radius_frac" in ti: th.top_icons.corner_radius_frac = float(ti["corner_radius_frac"])
+
     return th
 
 def textbox_fracs_from_defaults(defaults: Dict[str, Any], fallback: Tuple[float, float]) -> Tuple[float, float]:

@@ -9,6 +9,7 @@ from engine.narrative.loader import load_story_file
 from engine.narrative.presenter import NodePresenter
 from engine.ui.background_manager import BackgroundManager
 from engine.ui.widgets.bottom_bar import BottomBar, BottomBarButton
+from engine.ui.widgets.top_icons import TopIcons, IconButton
 
 
 class GameApp:
@@ -28,7 +29,9 @@ class GameApp:
         self.theme : Theme = build_theme_from_defaults(self.defaults)
         print("player_choice:", getattr(self.theme, "player_choice", {}))
         
-        self.fonts = FontCache()
+        self._min_font_px = int(self.theme.font_size)          # floor (your current size)
+        self._font_base_h = int(self.screen.get_height())      # reference height for scaling
+        self._max_font_px = 30
 
         
         # --- Textbox ---
@@ -37,6 +40,8 @@ class GameApp:
         tb_rect = compute_centered_rect(self.screen, wfrac, hfrac)
         rv = reveal_overrides_from_defaults(self.defaults)
         self.textbox = TextBox(tb_rect, self.theme, reveal=RevealParams(**rv))
+        
+        self._apply_text_scaling()                              # Apply text scaling after text box init
         
         self.clock = pygame.time.Clock()
         self.running = True
@@ -106,6 +111,14 @@ class GameApp:
             "right_2": BottomBarButton("right_2", "Inventory"),
             "right_3": BottomBarButton("right_3", "Settings"),
         })
+        
+        # --- Top-right icons (3) ---
+        self.top_icons = TopIcons(self.theme, count=3)
+        self.top_icons.set_icons([
+            IconButton("map",  image_path="game/assets/ui/map.png"),
+            IconButton("bag",  image_path="game/assets/ui/backpack.jpg"),
+            IconButton("menu", image_path="game/assets/ui/menu.png"),
+        ])
 
     def handle_input(self):
         for e in pygame.event.get():
@@ -137,6 +150,7 @@ class GameApp:
                         self.textbox.on_player_press()
 
             elif e.type == pygame.MOUSEMOTION:
+                self.top_icons.on_mouse_move(e.pos)
                 # Optional: hover support for choices and bar
                 if self.textbox.choice_active():
                     self.textbox.choice_hover_at(e.pos)
@@ -145,10 +159,19 @@ class GameApp:
                     self.bottom_bar.on_mouse_move(e.pos)
 
             elif e.type == pygame.MOUSEBUTTONDOWN and e.button == 1:
-                # 1) Give the bottom bar first crack — if consumed, stop here.
-                if self._handle_bottom_bar_click(e.pos):
-                    # Prevent simultaneous textbox click
+                # # 1) Give icons first crack
+                if self.top_icons.hit_test(e.pos):
+                    sid = self.top_icons.get_clicked(e.pos)
+                    if sid:
+                        print(f"[collision-test] top_icons: CLICKED '{sid}'")
+                        # TODO: open your screen based on sid
+                    # Prevent textbox from seeing this click
                     continue
+                
+                # # 1) Give the bottom bar first crack — if consumed, stop here.
+                # if self._handle_bottom_bar_click(e.pos):
+                #     # Prevent simultaneous textbox click
+                #     continue
 
                 # 2) Otherwise, route to textbox / choices
                 if self.textbox.choice_active():
@@ -161,6 +184,9 @@ class GameApp:
                 else:
                     print("[collision-test] textbox: click (advance)")
                     self.textbox.on_player_press()
+            
+            elif e.type == pygame.MOUSEBUTTONUP and e.button == 1:
+                self.top_icons.on_mouse_up()
 
             elif e.type == pygame.MOUSEWHEEL:
                 self.textbox.scroll(-e.y * self.cfg.input.scroll_wheel_pixels)
@@ -170,6 +196,11 @@ class GameApp:
                 # Reuse the resolved fractions you stored earlier
                 wfrac, hfrac = self._tb_fracs
                 self.textbox.on_resize(compute_centered_rect(self.screen, wfrac, hfrac))
+                # Now scale the font (and rebuild layout/caches)
+                self._apply_text_scaling()
+                # Refresh icons if necessary
+                # if hasattr(self, "top_icons") and hasattr(self.top_icons, "on_resize"):
+                #     self.top_icons.on_resize()
                 if hasattr(self.bottom_bar, "on_resize"):
                     self.bottom_bar.on_resize(self.screen.get_rect())
                 
@@ -183,6 +214,7 @@ class GameApp:
     def draw(self):
         self.bg.draw(self.screen, self.screen.get_rect())
         self.textbox.draw(self.screen)
+        self.top_icons.draw(self.screen)
         self.screen.set_clip(None)
 
         fps = int(self.clock.get_fps())
@@ -242,3 +274,36 @@ class GameApp:
 
         # If BottomBar has no hit_test(), be conservative and treat as not-consumed
         return False
+            
+    def _apply_text_scaling(self) -> None:
+        """Scale theme.font_size with window height, but never below the initial size."""
+        try:
+            sh = pygame.display.get_window_size()[1] if hasattr(pygame.display, "get_window_size") else self.screen.get_height()
+            k = max(0.0, sh / max(1, self._font_base_h))
+            scaled = int(round(self._min_font_px * k))
+
+            caps = []
+            # absolute px cap
+            mx = getattr(self.theme, "max_font_px", None)
+            if mx: caps.append(int(mx))
+            # relative to baseline
+            mult = getattr(self.theme, "font_max_mult", None)
+            if mult: caps.append(int(self._min_font_px * float(mult)))
+            # fraction of textbox viewport height
+            frac = getattr(self.theme, "font_max_frac_of_tb", None)
+            if frac:
+                tb_h = getattr(self.textbox, "viewport_height", None) or sh
+                caps.append(int(float(frac) * tb_h))
+
+            cap_px = min(caps) if caps else int(self._min_font_px * 1.75)
+            new_px = max(self._min_font_px, min(cap_px, scaled))
+
+            if new_px != self.theme.font_size:
+                old = self.theme.font_size
+                self.theme.font_size = new_px
+                self.textbox.view.set_theme(self.theme)  # rebuild TextLayout font
+                self.textbox.fonts.clear()
+                self.textbox.view.invalidate_layout()
+                print(f"[font-scale] {old} -> {new_px} (caps={caps or 'default'})")
+        except Exception as ex:
+            print(f"[font-scale] error: {ex}")

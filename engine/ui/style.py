@@ -57,6 +57,17 @@ class BottomBarStyle:
     button: BottomBarButtonStyle = field(default_factory=BottomBarButtonStyle)
     
 @dataclass
+class TopIconsStyle:
+    size_px: int = 48          # square icon box size
+    margin_px: int = 12        # distance from screen top/right edges
+    gap_px: int = 10           # space between icons
+    ring_rgba: tuple[int,int,int,int] = (255, 255, 255, 180)  # hover outline
+    ring_px: int = 2
+    hover_tint_rgba: tuple[int,int,int,int] = (255, 255, 255, 40)
+    down_tint_rgba:  tuple[int,int,int,int] = (255, 255, 255, 80)
+    corner_radius: int = 8     # round the icon’s hitbox square (purely visual)
+    
+@dataclass
 class Theme:
     font_path: str | None = None
     font_size: int = 22
@@ -73,6 +84,7 @@ class Theme:
     choice_blur_passes: int = 1        # 1–2
     choice_tint_rgba: Optional[tuple[int, int, int, int]] = (0, 0, 0, 96)  # darken a bit over the blur for readability
     bottom_bar: BottomBarStyle = field(default_factory=BottomBarStyle)
+    top_icons: TopIconsStyle = field(default_factory=TopIconsStyle)
     
     def derive(self, **overrides) -> "Theme":
         """ Create a variant theme (e.g., per screen) without mutating the base. """

@@ -81,6 +81,11 @@ class TextView:
 
         # Always grab the font via FontCache (in case theme changed)
         _ = self.layout.font
+        # try:
+        #     print(f"[TextView.ensure_layout] wrap_w={wrap_w} using font_px={self.layout.font.get_height()} "
+        #         f"(theme.font_size={self.theme.font_size})")
+        # except Exception:
+        #     pass
 
         if wrap_w != self._wrap_w:
             # Width changed -> rewrap/re-render the entries we were asked about.
