@@ -24,7 +24,6 @@ def _rgba(c, fallback=(10, 10, 10, 170)) -> tuple[int, int, int, int]:
     r, g, b, a = fallback
     return int(r), int(g), int(b), int(a)
 
-
 class BottomBar:
     """
     Bottom HUD bar:
@@ -52,6 +51,8 @@ class BottomBar:
         self.slots: Dict[str, BottomBarButton] = {}
         self._hit_rects: Dict[str, pygame.Rect] = {}
         self._font: Optional[pygame.font.Font] = None
+        self._bar_rect_rect: Optional[pygame.Rect] = None
+
 
     # ---------- public ----------
     def set_slots(self, mapping: Dict[str, BottomBarButton]) -> None:
@@ -65,6 +66,7 @@ class BottomBar:
 
     def draw(self, surface: pygame.Surface) -> None:
         bar = self._bar_rect(surface)
+        self._bar_rect_rect = bar
         if bar.w <= 0 or bar.h <= 0:
             return
 
@@ -143,6 +145,18 @@ class BottomBar:
         for sid, rect in layout.items():
             self._draw_button(surface, rect, self.slots.get(sid))
             self._hit_rects[sid] = rect
+            
+    def hit_test(self, pos: tuple[int, int]) -> bool:
+        """
+        True if 'pos' lies inside the bar's rectangle.
+        Works whether you store it as self._bar_rect (Rect) or epose a method.
+        """
+        br = self._bar_rect_rect
+        return isinstance(br, pygame.Rect) and br.collidepoint(pos)
+
+    def on_resize(self, screen_rect: pygame.Rect) -> None:
+        """ Call this on VIDEORESIZE so we can relayout next draw. """
+        self._screen_rect = screen_rect
 
     # ---------- internals ----------
     def _bar_rect(self, surface: pygame.Surface) -> pygame.Rect:
