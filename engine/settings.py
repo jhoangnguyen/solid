@@ -2,7 +2,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, Tuple, Optional
-from engine.ui.style import Theme, WaitIndicatorStyle
+from engine.ui.style import Theme, WaitIndicatorStyle, BottomBarStyle, BottomBarButtonStyle
 
 try:
     import yaml
@@ -202,27 +202,31 @@ def build_theme_from_defaults(defaults: Dict[str, Any]) -> Theme:
     
     bb_yaml = tdata.get("bottom_bar", {}) or {}
     btn_yaml = bb_yaml.get("button", {}) or {}
-    bb = {
-        "height": int(bb_yaml.get("height", 72)),
-        "radius": int(bb_yaml.get("radius", 12)),
-        "padding": tuple(bb_yaml.get("padding", (10,16,10,16))),
-        "gap": int(bb_yaml.get("gap", 12)),
-        "bg_rgba": tuple(bb_yaml.get("bg_rgba", (10,10,10,170))),
-        "border_rgba": tuple(bb_yaml.get("border_rgba", (255,255,255,60))),
-        "button": {
-            "h": int(btn_yaml.get("h", 44)),
-            "pad_x": int(btn_yaml.get("pad_x", 14)),
-            "radius": int(btn_yaml.get("radius", 10)),
-            "text_size": int(btn_yaml.get("text_size", 18)),
-            "text_rgb": tuple(btn_yaml.get("text_rgb", (235,235,235))),
-            "fill_rgba": tuple(btn_yaml.get("fill_rgba", (30,30,35,220))),
-            "hover_rgba": tuple(btn_yaml.get("hover_rgba", (50,50,60,240))),
-            "down_rgba": tuple(btn_yaml.get("down_rgba", (70,70,80,255))),
-            "border_rgba": tuple(btn_yaml.get("border_rgba", (255,255,255,60))),
-            "border_px": int(btn_yaml.get("border_px", 1)),
-        }
-    }
-    setattr(th, "bottom_bar", bb)
+
+    th.bottom_bar.height      = int(bb_yaml.get("height", th.bottom_bar.height))
+    th.bottom_bar.radius      = int(bb_yaml.get("radius", th.bottom_bar.radius))
+    th.bottom_bar.padding     = tuple(bb_yaml.get("padding", th.bottom_bar.padding))
+    th.bottom_bar.gap         = int(bb_yaml.get("gap", th.bottom_bar.gap))
+    th.bottom_bar.bg_rgba     = tuple(bb_yaml.get("bg_rgba", th.bottom_bar.bg_rgba))
+    th.bottom_bar.border_rgba = tuple(bb_yaml.get("border_rgba", th.bottom_bar.border_rgba))
+
+    b = th.bottom_bar.button
+    b.h          = int(btn_yaml.get("h", b.h))
+    b.pad_x      = int(btn_yaml.get("pad_x", b.pad_x))
+    b.radius     = int(btn_yaml.get("radius", b.radius))
+    b.text_size  = int(btn_yaml.get("text_size", b.text_size))
+    b.text_rgb   = tuple(btn_yaml.get("text_rgb", b.text_rgb))
+    b.fill_rgba  = tuple(btn_yaml.get("fill_rgba", b.fill_rgba))
+    b.hover_rgba = tuple(btn_yaml.get("hover_rgba", b.hover_rgba))
+    b.down_rgba  = tuple(btn_yaml.get("down_rgba", b.down_rgba))
+    b.border_rgba= tuple(btn_yaml.get("border_rgba", b.border_rgba))
+    b.border_px  = int(btn_yaml.get("border_px", b.border_px))
+    
+    b.h_frac         = float(btn_yaml.get("h_frac", b.h_frac)) if btn_yaml.get("h_frac", None) is not None else b.h_frac
+    b.pad_x_frac     = float(btn_yaml.get("pad_x_frac", b.pad_x_frac)) if btn_yaml.get("pad_x_frac", None) is not None else b.pad_x_frac
+    b.text_size_frac = float(btn_yaml.get("text_size_frac", b.text_size_frac)) if btn_yaml.get("text_size_frac", None) is not None else b.text_size_frac
+    b.radius_frac    = float(btn_yaml.get("radius_frac", b.radius_frac)) if btn_yaml.get("radius_frac", None) is not None else b.radius_frac
+    b.border_px_frac = float(btn_yaml.get("border_px_frac", b.border_px_frac)) if btn_yaml.get("border_px_frac", None) is not None else b.border_px_frac
     return th
 
 def textbox_fracs_from_defaults(defaults: Dict[str, Any], fallback: Tuple[float, float]) -> Tuple[float, float]:

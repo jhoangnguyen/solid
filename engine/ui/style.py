@@ -26,8 +26,36 @@ class WaitIndicatorStyle:
     offset_y: int = 2
     scale: float = 1.0
     font_path: str | None = None
+    
+@dataclass
+class BottomBarButtonStyle:
+    h: int = 44
+    pad_x: int = 14
+    radius: int = 10
+    text_size: int = 18
+    text_rgb: tuple[int, int, int] = (235, 235, 235)
+    fill_rgba: tuple[int, int, int, int] = (30, 30, 35, 220)
+    hover_rgba: tuple[int, int, int, int] = (50, 50, 60, 240)
+    down_rgba: tuple[int, int, int, int]  = (70, 70, 80, 255)
+    border_rgba: tuple[int, int, int, int] = (255, 255, 255, 60)
+    border_px: int = 1
+    h_frac: float | None = None          # 0..1 of the LEFT cell height
+    pad_x_frac: float | None = None      # 0..0.5 of the button cell width
+    text_size_frac: float | None = None  # 0..1 of the BAR height
+    radius_frac: float | None = None     # 0..0.5 of the BAR height
+    border_px_frac: float | None = None  # 0..0.1 of the BAR height
 
-
+    
+@dataclass
+class BottomBarStyle:
+    height: int = 72               # pixels (preferred)
+    radius: int = 12
+    padding: tuple[int, int, int, int] = (10, 16, 10, 16)  # t, r, b, l
+    gap: int = 12
+    bg_rgba: tuple[int, int, int, int] = (10, 10, 10, 170)
+    border_rgba: tuple[int, int, int, int] = (255, 255, 255, 60)
+    button: BottomBarButtonStyle = field(default_factory=BottomBarButtonStyle)
+    
 @dataclass
 class Theme:
     font_path: str | None = None
@@ -44,6 +72,7 @@ class Theme:
     choice_blur_scale: float = 0.25      # 0.20–0.35 = stronger blur
     choice_blur_passes: int = 1        # 1–2
     choice_tint_rgba: Optional[tuple[int, int, int, int]] = (0, 0, 0, 96)  # darken a bit over the blur for readability
+    bottom_bar: BottomBarStyle = field(default_factory=BottomBarStyle)
     
     def derive(self, **overrides) -> "Theme":
         """ Create a variant theme (e.g., per screen) without mutating the base. """

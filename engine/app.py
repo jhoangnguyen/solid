@@ -105,63 +105,6 @@ class GameApp:
             "right_2": BottomBarButton("right_2", "MAP"),
         })
 
-                
-    # def handle_input(self):
-    #     for e in pygame.event.get():
-    #         if e.type == pygame.QUIT:
-    #             self.running = False
-    #         elif e.type == pygame.KEYDOWN:
-    #             if e.key == pygame.K_ESCAPE:
-    #                 self.running = False
-    #             elif self.textbox.choice_active():
-    #                 if e.key == pygame.K_UP:
-    #                     self.textbox.choice_move_cursor(-1)
-    #                 elif e.key == pygame.K_DOWN:
-    #                     self.textbox.choice_move_cursor(+1)
-    #                 elif e.key in (pygame.K_RETURN, pygame.K_SPACE):
-    #                     idx = self.textbox.choice_get_selected_index()
-    #                     if idx is not None and idx >= 0:
-    #                         self.presenter.submit_choice_index(idx)
-    #                 elif e.key == pygame.K_PAGEUP:
-    #                     self.textbox.scroll(-self.textbox.viewport_height * self.cfg.input.page_scroll_frac)
-    #                 elif e.key == pygame.K_PAGEDOWN:
-    #                     self.textbox.scroll(+self.textbox.viewport_height * self.cfg.input.page_scroll_frac)
-    #                 elif e.key == pygame.K_HOME:
-    #                     self.textbox.scroll_to_top()
-    #                 elif e.key == pygame.K_END:
-    #                     self.textbox.scroll_to_bottom()
-    #             else:
-    #                 # no active choice panel -> normal VN advance controls
-    #                 if e.key in (pygame.K_SPACE, pygame.K_RETURN):
-    #                     self.textbox.on_player_press()
-    #                 elif e.key == pygame.K_PAGEUP:
-    #                     self.textbox.scroll(-self.textbox.viewport_height * self.cfg.input.page_scroll_frac)
-    #                 elif e.key == pygame.K_PAGEDOWN:
-    #                     self.textbox.scroll(+self.textbox.viewport_height * self.cfg.input.page_scroll_frac)
-    #                 elif e.key == pygame.K_HOME:
-    #                     self.textbox.scroll_to_top()
-    #                 elif e.key == pygame.K_END:
-    #                     self.textbox.scroll_to_bottom()
-
-    #         elif e.type == pygame.MOUSEMOTION:
-    #             if self.textbox.choice_active():
-    #                 self.textbox.choice_hover_at(e.pos)
-
-    #         elif e.type == pygame.MOUSEBUTTONDOWN and e.button == 1:
-    #             if self.textbox.choice_active():
-    #                 idx = self.textbox.choice_click(e.pos)
-    #                 if idx is not None:
-    #                     self.presenter.submit_choice_index(idx)
-    #             else:
-    #                 self.textbox.on_player_press()
-
-    #         elif e.type == pygame.MOUSEWHEEL:
-    #             self.textbox.scroll(-e.y * self.cfg.input.scroll_wheel_pixels)
-    #         elif e.type == pygame.VIDEORESIZE:
-    #             self.screen = pygame.display.set_mode((e.w, e.h), pygame.RESIZABLE)
-    #             wfrac, hfrac = self._tb_fracs
-    #             self.textbox.on_resize(compute_centered_rect(self.screen, self.cfg.textbox.width_frac, self.cfg.textbox.height_frac))
-                
     def handle_input(self):
         for e in pygame.event.get():
             if e.type == pygame.QUIT:

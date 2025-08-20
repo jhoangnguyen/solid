@@ -160,13 +160,20 @@ theme:
     multiply_rgb: [230, 230, 230]   # neutral gray; try 224–236 to taste
 
   bottom_bar:
-    height: 72
+    # height: 72
+    height: 0
     radius: 12
     padding: [10, 16, 10, 16]
     gap: 12
     bg_rgba: [10, 10, 10, 170]
     border_rgba: [255, 255, 255, 60]
     button:
+      # Use fractions instead of fixed pixels:
+      h_frac: 0.75          # left buttons are 75% of their cell height
+      pad_x_frac: 0.06      # 6% of cell width padding on each side
+      text_size_frac: 0.24  # 24% of bar height -> scales with resize
+      radius_frac: 0.12     # 12% of bar height corner radius
+      border_px_frac: 0.02  # 2% of bar height border thickness
       h: 44
       pad_x: 14
       radius: 10
