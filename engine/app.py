@@ -349,6 +349,7 @@ class GameApp:
             title="Inventory",
             theme=self.theme,
             content_draw=self._draw_inventory_content,
+            dims_backdrop=False,
         )
 
     def _draw_inventory_content(self, surface: pygame.Surface, rect: pygame.Rect) -> None:
@@ -388,6 +389,7 @@ class GameApp:
             title="Map",
             theme=self.theme,
             content_draw=self._draw_map_content,
+            dims_backdrop=False,
         )
 
     def _draw_map_content(self, surface: pygame.Surface, rect: pygame.Rect) -> None:
@@ -408,6 +410,9 @@ class GameApp:
             theme=self.theme,
             content_draw=self._draw_settings_content,
             draggable=False, # Locked in place
+            keep_centered=True, # Stay centered forever
+            center_x=True,      # Center both axes
+            center_y=True,
         )
 
     def _draw_settings_content(self, surface: pygame.Surface, rect: pygame.Rect) -> None:
