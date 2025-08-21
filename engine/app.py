@@ -27,6 +27,7 @@ class GameApp:
         # Load default settings
         self.defaults = load_ui_defaults("game/config/defaults.yaml")
         self.theme : Theme = build_theme_from_defaults(self.defaults)
+        self.fonts = FontCache()
         print("player_choice:", getattr(self.theme, "player_choice", {}))
         
         self._min_font_px = int(self.theme.font_size)          # floor (your current size)
@@ -39,7 +40,7 @@ class GameApp:
         self._tb_fracs = (wfrac, hfrac)
         tb_rect = compute_centered_rect(self.screen, wfrac, hfrac)
         rv = reveal_overrides_from_defaults(self.defaults)
-        self.textbox = TextBox(tb_rect, self.theme, reveal=RevealParams(**rv))
+        self.textbox = TextBox(tb_rect, self.theme, self.fonts, reveal=RevealParams(**rv))
         
         self._apply_text_scaling()                              # Apply text scaling after text box init
         
@@ -60,7 +61,6 @@ class GameApp:
         
         # Seed initial background from defaults.yaml if present; otherwise fall back to the old fireplace.
         try:
-            # defaults = load_ui_defaults("game/config/defaults.yaml")
             win_bg = (self.defaults.get("backgrounds", {}) or {}).get("window", {}) or {}
             if win_bg:
             # accept dict spec straight from YAML
