@@ -17,10 +17,11 @@ class BackgroundSpec:
         if isinstance(v, str):
             return BackgroundSpec(image_path=v)
         if isinstance(v, dict):
+            tint = v.get("tint_rgba", None)
             return BackgroundSpec(
                 image_path=v.get("image_path") or v.get("path") or v.get("file"),
                 mode=v.get("mode", "cover"),
-                tint_rgba=tuple(v["tint_rgba"] if v.get("tint_rgba") is not None else None)
+                tint_rgba=(tuple(tint) if tint is not None else None)
             )
         raise TypeError(f"Unsupported bg spec: {type(v)}")
     

@@ -2,7 +2,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, Tuple, Optional
-from engine.ui.style import Theme, WaitIndicatorStyle
+from engine.ui.style import Theme, WaitIndicatorStyle, BottomBarStyle, BottomBarButtonStyle
 
 try:
     import yaml
@@ -81,8 +81,8 @@ def load_settings(path: str = "game/config/defaults.yaml") -> AppCfg:
         reveal=RevealCfg(
             per_line_delay=float(_get(data, "ui.textbox.reveal.per_line_delay", 0.15)),
             intro_duration=float(_get(data, "ui.textbox.reveal.intro_duration", 0.18)),
-            intro_offset_px=float(_get(data, "ui.textbox.reveal.intro_offset_px", 10)),
-            stick_to_bottom_threshold_px=float(_get(data, "ui.textbox.reveal.stick_to_bottom_threshold_px", 24)),
+            intro_offset_px=int(_get(data, "ui.textbox.reveal.intro_offset_px", 10)),
+            stick_to_bottom_threshold_px=int(_get(data, "ui.textbox.reveal.stick_to_bottom_threshold_px", 24)),
             chars_per_sec=float(_get(data, "ui.textbox.reveal.chars_per_sec", 45.0)),
             pause_short_s=float(_get(data, "ui.textbox.reveal.pause_short_s", 0.06)),
             pause_long_s=float(_get(data, "ui.textbox.reveal.pause_long_s", 0.25)),
@@ -115,6 +115,9 @@ def build_theme_from_defaults(defaults: Dict[str, Any]) -> Theme:
     ct = tdata.get("choice_tint_rgba", getattr(th, "choice_tint_rgba", (0, 0, 0, 96)))
     ct = tuple(ct) if ct is not None else None
     setattr(th, "choice_tint_rgba", ct)
+    setattr(th, "max_font_px", int(tdata.get("max_font_px", 0)) or None)
+    setattr(th, "font_max_mult", float(tdata.get("font_max_mult", 0.0)) or None)
+    setattr(th, "font_max_frac_of_tb", float(tdata.get("font_max_frac_of_tb", 0.0)) or None)
 
     # scrollbar
     sc = tdata.get("scrollbar", {}) or {}
@@ -199,6 +202,53 @@ def build_theme_from_defaults(defaults: Dict[str, Any]) -> Theme:
     pc["multiply_rgb"]  = _norm_rgb(pc.get("multiply_rgb"))
 
     setattr(th, "player_choice", pc)
+    
+    # -- BOTTOM BAR ---
+    bb_yaml = tdata.get("bottom_bar", {}) or {}
+    btn_yaml = bb_yaml.get("button", {}) or {}
+
+    th.bottom_bar.height      = int(bb_yaml.get("height", th.bottom_bar.height))
+    th.bottom_bar.radius      = int(bb_yaml.get("radius", th.bottom_bar.radius))
+    th.bottom_bar.padding     = tuple(bb_yaml.get("padding", th.bottom_bar.padding))
+    th.bottom_bar.gap         = int(bb_yaml.get("gap", th.bottom_bar.gap))
+    th.bottom_bar.bg_rgba     = tuple(bb_yaml.get("bg_rgba", th.bottom_bar.bg_rgba))
+    th.bottom_bar.border_rgba = tuple(bb_yaml.get("border_rgba", th.bottom_bar.border_rgba))
+
+    b = th.bottom_bar.button
+    b.h          = int(btn_yaml.get("h", b.h))
+    b.pad_x      = int(btn_yaml.get("pad_x", b.pad_x))
+    b.radius     = int(btn_yaml.get("radius", b.radius))
+    b.text_size  = int(btn_yaml.get("text_size", b.text_size))
+    b.text_rgb   = tuple(btn_yaml.get("text_rgb", b.text_rgb))
+    b.fill_rgba  = tuple(btn_yaml.get("fill_rgba", b.fill_rgba))
+    b.hover_rgba = tuple(btn_yaml.get("hover_rgba", b.hover_rgba))
+    b.down_rgba  = tuple(btn_yaml.get("down_rgba", b.down_rgba))
+    b.border_rgba= tuple(btn_yaml.get("border_rgba", b.border_rgba))
+    b.border_px  = int(btn_yaml.get("border_px", b.border_px))
+    
+    b.h_frac         = float(btn_yaml.get("h_frac", b.h_frac)) if btn_yaml.get("h_frac", None) is not None else b.h_frac
+    b.pad_x_frac     = float(btn_yaml.get("pad_x_frac", b.pad_x_frac)) if btn_yaml.get("pad_x_frac", None) is not None else b.pad_x_frac
+    b.text_size_frac = float(btn_yaml.get("text_size_frac", b.text_size_frac)) if btn_yaml.get("text_size_frac", None) is not None else b.text_size_frac
+    b.radius_frac    = float(btn_yaml.get("radius_frac", b.radius_frac)) if btn_yaml.get("radius_frac", None) is not None else b.radius_frac
+    b.border_px_frac = float(btn_yaml.get("border_px_frac", b.border_px_frac)) if btn_yaml.get("border_px_frac", None) is not None else b.border_px_frac
+    
+    # --- TOP ICONS ---
+    ti = tdata.get("top_icons", {}) or {}
+    th.top_icons.size_px     = int(ti.get("size_px", th.top_icons.size_px))
+    th.top_icons.margin_px   = int(ti.get("margin_px", th.top_icons.margin_px))
+    th.top_icons.gap_px      = int(ti.get("gap_px", th.top_icons.gap_px))
+    th.top_icons.ring_rgba   = tuple(ti.get("ring_rgba", th.top_icons.ring_rgba))
+    th.top_icons.ring_px     = int(ti.get("ring_px", th.top_icons.ring_px))
+    th.top_icons.hover_tint_rgba = tuple(ti.get("hover_tint_rgba", th.top_icons.hover_tint_rgba))
+    th.top_icons.down_tint_rgba  = tuple(ti.get("down_tint_rgba", th.top_icons.down_tint_rgba))
+    th.top_icons.corner_radius   = int(ti.get("corner_radius", th.top_icons.corner_radius))
+    
+    if "size_frac" in ti:   th.top_icons.size_frac   = float(ti["size_frac"])
+    if "margin_frac" in ti: th.top_icons.margin_frac = float(ti["margin_frac"])
+    if "gap_frac" in ti:    th.top_icons.gap_frac    = float(ti["gap_frac"])
+    if "ring_px_frac" in ti: th.top_icons.ring_px_frac = float(ti["ring_px_frac"])
+    if "corner_radius_frac" in ti: th.top_icons.corner_radius_frac = float(ti["corner_radius_frac"])
+
     return th
 
 def textbox_fracs_from_defaults(defaults: Dict[str, Any], fallback: Tuple[float, float]) -> Tuple[float, float]:

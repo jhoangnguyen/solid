@@ -81,6 +81,11 @@ class TextView:
 
         # Always grab the font via FontCache (in case theme changed)
         _ = self.layout.font
+        # try:
+        #     print(f"[TextView.ensure_layout] wrap_w={wrap_w} using font_px={self.layout.font.get_height()} "
+        #         f"(theme.font_size={self.theme.font_size})")
+        # except Exception:
+        #     pass
 
         if wrap_w != self._wrap_w:
             # Width changed -> rewrap/re-render the entries we were asked about.
@@ -274,47 +279,52 @@ class TextView:
         layer.set_clip(prev_clip)
 
     # --------- internals ---------
-    def _layout_entry(self, e: Entry, wrap_w: int) -> _Layout:        
-        # Wrap, render, and precompute prefix widths for fast typewriter clipping
-        lines = self.layout.wrap(e.text or "", wrap_w)
-        # If this is a player-choice line, wrap to (viewpoint - indent)
-        indent = 0
+    def _layout_entry(self, e: Entry, wrap_w: int) -> _Layout:
+        """Wrap, render, and precompute per-line prefix widths (no flat_prefix)."""
+        # 1) Indent for player-choice first
+        indent_px = 0
         if getattr(e, "is_player_choice", False):
             pcs = self._get_player_choice_style()
-            indent = int(pcs.get("indent_px", 0))
-        effective_w = max(0, wrap_w - max(0, indent))
+            indent_px = int(pcs.get("indent_px", 0))
+
+        effective_w = max(0, wrap_w - max(0, indent_px))
+
+        # 2) Single wrap pass using effective width
         lines = self.layout.wrap(e.text or "", effective_w)
-        
-        surfaces, height = self.layout.render_lines(lines)
-        measure = self.layout.font.size
-        
+
+        # 3) Decide color override for player-choice text
+        color_override = None
+        if getattr(e, "is_player_choice", False):
+            pcs = self._get_player_choice_style()
+            tint = pcs.get("text_tint_rgb", None)
+            if isinstance(tint, (tuple, list)) and len(tint) == 3:
+                r, g, b = (int(tint[0]), int(tint[1]), int(tint[2]))
+                color_override = (r, g, b)
+
+        # 4) Render once (with color override if present)
+        surfaces, height = self.layout.render_lines(lines, color=color_override)
+        measure = self.layout.font.size  # fast width measure for the same font
+
+        # 5) Per-line cumulative widths for typewriter clipping
         prefix_w: List[List[int]] = []
         for s in lines:
             widths = [0]
             for i in range(1, len(s) + 1):
                 widths.append(measure(s[:i])[0])
             prefix_w.append(widths)
-        
+
+        # 6) Build lean layout object
         total_chars = sum(len(s) for s in lines)
-        
-        # Optional per-entry tint (for player choice)
-        if getattr(e, "is_player_choice", False):
-            pcs = self._get_player_choice_style()
-            tint = pcs.get("text_tint_rgb", None)
-            if tint:
-                r, g, b = [int(x) for x in tint]
-                tinted = []
-                for s in surfaces:
-                    if s is None: continue
-                    cpy = s.copy()
-                    # Multiply only RGB; keep alpha
-                    mul = pygame.Surface(cpy.get_size(), pygame.SRCALPHA)
-                    mul.fill((r, g, b, 255))
-                    cpy.blit(mul, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
-                    tinted.append(cpy)
-                surfaces = tinted
-                    
-        return _Layout(surfaces, height, lines, prefix_w, total_chars)
+        lay = _Layout(
+            surfaces=surfaces,
+            height=height,
+            lines=lines,
+            prefix_w=prefix_w,
+            total_chars=total_chars,
+        )
+        return lay
+
+
 
     # ---------- wait indicator ----------
     def _get_player_choice_style(self) -> dict:
