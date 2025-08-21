@@ -10,7 +10,7 @@ from engine.narrative.presenter import NodePresenter
 from engine.ui.background_manager import BackgroundManager
 from engine.ui.widgets.bottom_bar import BottomBar, BottomBarButton
 from engine.ui.widgets.top_icons import TopIcons, IconButton
-
+from engine.ui.widgets.window_panel import WindowManager, ModalWindow
 
 class GameApp:
     def __init__(self, cfg: AppCfg):
@@ -119,11 +119,26 @@ class GameApp:
             IconButton("bag",  image_path="game/assets/ui/backpack.jpg"),
             IconButton("menu", image_path="game/assets/ui/menu.png"),
         ])
+        
+        # Map icon id -> (window_id, builder)
+        self.icon_routes = {
+            "bag":  ("inventory", self._build_inventory_window),
+            "map":  ("map",       self._build_map_window),
+            "menu": ("settings",  self._build_settings_window),
+        }
+        
+        # --- Initialiize In-Game Windows ---
+        self.windows = WindowManager(self.theme)
 
     def handle_input(self):
         for e in pygame.event.get():
             if e.type == pygame.QUIT:
                 self.running = False
+                
+            # --- windows get first dibs ---
+            if self.windows.handle_event(e):
+                # If a window handled this, don't fall through to game UI.
+                continue
 
             elif e.type == pygame.KEYDOWN:
                 if e.key == pygame.K_ESCAPE:
@@ -157,33 +172,46 @@ class GameApp:
                 # If your BottomBar has hover, call it here (no-op if absent):
                 if hasattr(self.bottom_bar, "on_mouse_move"):
                     self.bottom_bar.on_mouse_move(e.pos)
-
+                    
             elif e.type == pygame.MOUSEBUTTONDOWN and e.button == 1:
-                # # 1) Give icons first crack
+                # 1) Icons never advance text
                 if self.top_icons.hit_test(e.pos):
                     sid = self.top_icons.get_clicked(e.pos)
                     if sid:
-                        print(f"[collision-test] top_icons: CLICKED '{sid}'")
-                        # TODO: open your screen based on sid
-                    # Prevent textbox from seeing this click
-                    continue
-                
-                # # 1) Give the bottom bar first crack — if consumed, stop here.
-                # if self._handle_bottom_bar_click(e.pos):
-                #     # Prevent simultaneous textbox click
-                #     continue
+                        route = self.icon_routes.get(sid)
+                        if route:
+                            win_id, builder = route
+                            self.windows.toggle(win_id, builder=builder)
+                        else:
+                            print(f"[icons] no route for '{sid}'")
+                    continue  # stop here; icon clicks don't advance text
 
-                # 2) Otherwise, route to textbox / choices
+                # 2) If click lands on any open window, do not progress text
+                if self.windows.any_open() and self.windows.hit_test(e.pos):
+                    # Let windows drag/close logic run (already called at loop top),
+                    # but don't fall through to text progression.
+                    continue
+
+                in_tb = self.textbox.rect.collidepoint(e.pos)
+
+                # 3) Choices: only clicking an actual choice selects; nothing else advances
                 if self.textbox.choice_active():
-                    idx = self.textbox.choice_click(e.pos)
-                    if idx is not None:
-                        print(f"[collision-test] textbox: CLICKED choice index {idx}")
-                        self.presenter.submit_choice_index(idx)
-                    else:
-                        print("[collision-test] textbox: click (no choice)")
-                else:
+                    if in_tb:
+                        idx = self.textbox.choice_click(e.pos)
+                        if idx is not None:
+                            print(f"[collision-test] textbox: CLICKED choice index {idx}")
+                            self.presenter.submit_choice_index(idx)
+                    # Clicks outside the textbox are ignored while choices are up
+                    continue
+
+                # 4) No choices: advance only when clicking textbox OR empty space
+                if in_tb:
                     print("[collision-test] textbox: click (advance)")
                     self.textbox.on_player_press()
+                else:
+                    print("[collision-test] empty space: click (advance)")
+                    self.textbox.on_player_press()
+                continue
             
             elif e.type == pygame.MOUSEBUTTONUP and e.button == 1:
                 self.top_icons.on_mouse_up()
@@ -215,6 +243,7 @@ class GameApp:
         self.bg.draw(self.screen, self.screen.get_rect())
         self.textbox.draw(self.screen)
         self.top_icons.draw(self.screen)
+        self.windows.draw(self.screen)
         self.screen.set_clip(None)
 
         fps = int(self.clock.get_fps())
@@ -307,3 +336,80 @@ class GameApp:
                 print(f"[font-scale] {old} -> {new_px} (caps={caps or 'default'})")
         except Exception as ex:
             print(f"[font-scale] error: {ex}")
+
+    def _build_inventory_window(self) -> ModalWindow:
+        sw, sh = self.screen.get_size()
+        w, h = max(320, sw // 2), max(240, sh // 2)
+        x, y = (sw - w) // 2, (sh - h) // 2
+        return ModalWindow(
+            "inventory",
+            pygame.Rect(x, y, w, h),
+            title="Inventory",
+            theme=self.theme,
+            content_draw=self._draw_inventory_content,
+        )
+
+    def _draw_inventory_content(self, surface: pygame.Surface, rect: pygame.Rect) -> None:
+        # Placeholder “grid” so you have something to tweak later.
+        # Draw a subtle panel background (optional).
+        pygame.draw.rect(surface, (255, 255, 255, 20), rect, border_radius=8)
+        pygame.draw.rect(surface, (255, 255, 255), rect, width=1, border_radius=8)
+
+        # Title-ish text inside content
+        font = pygame.font.Font(getattr(self.theme, "font_path", None), max(12, self.theme.font_size))
+        sub = font.render("Inventory (WIP template)", True, (220, 220, 220))
+        surface.blit(sub, (rect.x + 8, rect.y + 6))
+
+        # Simple 5x4 slots grid
+        rows, cols = 4, 5
+        gap = 8
+        slot_w = (rect.w - gap * (cols + 1)) // cols
+        slot_h = (rect.h - 40 - gap * (rows + 1)) // rows  # leave a little header space
+        y = rect.y + 32
+        for r in range(rows):
+            x = rect.x + gap
+            for c in range(cols):
+                cell = pygame.Rect(x, y, slot_w, slot_h)
+                pygame.draw.rect(surface, (255, 255, 255, 40), cell, border_radius=6)
+                pygame.draw.rect(surface, (255, 255, 255), cell, width=1, border_radius=6)
+                x += slot_w + gap
+            y += slot_h + gap
+
+
+    def _build_map_window(self) -> ModalWindow:
+        sw, sh = self.screen.get_size()
+        w, h = max(360, int(sw * 0.55)), max(260, int(sh * 0.5))
+        x, y = (sw - w) // 2, (sh - h) // 2
+        return ModalWindow(
+            "map",
+            pygame.Rect(x, y, w, h),
+            title="Map",
+            theme=self.theme,
+            content_draw=self._draw_map_content,
+        )
+
+    def _draw_map_content(self, surface: pygame.Surface, rect: pygame.Rect) -> None:
+        pygame.draw.rect(surface, (255, 255, 255, 20), rect, border_radius=8)
+        pygame.draw.rect(surface, (255, 255, 255), rect, width=1, border_radius=8)
+        font = pygame.font.Font(getattr(self.theme, "font_path", None), max(12, self.theme.font_size))
+        sub = font.render("Map (WIP template)", True, (220, 220, 220))
+        surface.blit(sub, (rect.x + 8, rect.y + 6))
+
+    def _build_settings_window(self) -> ModalWindow:
+        sw, sh = self.screen.get_size()
+        w, h = max(360, int(sw * 0.45)), max(240, int(sh * 0.4))
+        x, y = (sw - w) // 2, (sh - h) // 2
+        return ModalWindow(
+            "settings",
+            pygame.Rect(x, y, w, h),
+            title="Settings",
+            theme=self.theme,
+            content_draw=self._draw_settings_content,
+        )
+
+    def _draw_settings_content(self, surface: pygame.Surface, rect: pygame.Rect) -> None:
+        pygame.draw.rect(surface, (255, 255, 255, 20), rect, border_radius=8)
+        pygame.draw.rect(surface, (255, 255, 255), rect, width=1, border_radius=8)
+        font = pygame.font.Font(getattr(self.theme, "font_path", None), max(12, self.theme.font_size))
+        sub = font.render("Settings (WIP template)", True, (220, 220, 220))
+        surface.blit(sub, (rect.x + 8, rect.y + 6))
