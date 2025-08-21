@@ -11,6 +11,7 @@ from engine.ui.background_manager import BackgroundManager
 from engine.ui.widgets.bottom_bar import BottomBar, BottomBarButton
 from engine.ui.widgets.top_icons import TopIcons, IconButton
 from engine.ui.widgets.window_panel import WindowManager, ModalWindow
+from engine.resources import after_display_init
 
 class GameApp:
     def __init__(self, cfg: AppCfg):
@@ -23,10 +24,12 @@ class GameApp:
         # Set window size and title
         pygame.display.set_caption(cfg.window.title)
         self.screen = pygame.display.set_mode((cfg.window.width, cfg.window.height), flags=pygame.RESIZABLE | pygame.SCALED | pygame.DOUBLEBUF)
+        after_display_init()
         
         # Load default settings
         self.defaults = load_ui_defaults("game/config/defaults.yaml")
         self.theme : Theme = build_theme_from_defaults(self.defaults)
+        self.fonts = FontCache()
         print("player_choice:", getattr(self.theme, "player_choice", {}))
         
         self._min_font_px = int(self.theme.font_size)          # floor (your current size)
@@ -39,7 +42,7 @@ class GameApp:
         self._tb_fracs = (wfrac, hfrac)
         tb_rect = compute_centered_rect(self.screen, wfrac, hfrac)
         rv = reveal_overrides_from_defaults(self.defaults)
-        self.textbox = TextBox(tb_rect, self.theme, reveal=RevealParams(**rv))
+        self.textbox = TextBox(tb_rect, self.theme, self.fonts, reveal=RevealParams(**rv))
         
         self._apply_text_scaling()                              # Apply text scaling after text box init
         
@@ -60,7 +63,6 @@ class GameApp:
         
         # Seed initial background from defaults.yaml if present; otherwise fall back to the old fireplace.
         try:
-            # defaults = load_ui_defaults("game/config/defaults.yaml")
             win_bg = (self.defaults.get("backgrounds", {}) or {}).get("window", {}) or {}
             if win_bg:
             # accept dict spec straight from YAML
@@ -347,6 +349,7 @@ class GameApp:
             title="Inventory",
             theme=self.theme,
             content_draw=self._draw_inventory_content,
+            dims_backdrop=False,
         )
 
     def _draw_inventory_content(self, surface: pygame.Surface, rect: pygame.Rect) -> None:
@@ -386,6 +389,7 @@ class GameApp:
             title="Map",
             theme=self.theme,
             content_draw=self._draw_map_content,
+            dims_backdrop=False,
         )
 
     def _draw_map_content(self, surface: pygame.Surface, rect: pygame.Rect) -> None:
@@ -405,6 +409,10 @@ class GameApp:
             title="Settings",
             theme=self.theme,
             content_draw=self._draw_settings_content,
+            draggable=False, # Locked in place
+            keep_centered=True, # Stay centered forever
+            center_x=True,      # Center both axes
+            center_y=True,
         )
 
     def _draw_settings_content(self, surface: pygame.Surface, rect: pygame.Rect) -> None:
