@@ -42,6 +42,7 @@ class ModalWindow:
         theme=None,
         content_draw: Optional[Callable[[pygame.Surface, pygame.Rect], None]] = None,
         style: Optional[WindowStyle] = None,
+        draggable: bool = True,
     ):
         self.id = id
         self.rect = rect.copy()
@@ -49,6 +50,7 @@ class ModalWindow:
         self.theme = theme
         self.style = style or WindowStyle()
         self.content_draw = content_draw
+        self.draggable = draggable
 
         self.visible = True
         self._dragging = False
@@ -75,11 +77,12 @@ class ModalWindow:
                 self.visible = False
                 return True
             if self._title_rect().collidepoint(e.pos):
-                self._dragging = True
-                mx, my = e.pos
-                self._drag_dx = mx - self.rect.x
-                self._drag_dy = my - self.rect.y
-                return True
+                if self.draggable:
+                    self._dragging = True
+                    mx, my = e.pos
+                    self._drag_dx = mx - self.rect.x
+                    self._drag_dy = my - self.rect.y
+                    return True
 
         if e.type == pygame.MOUSEBUTTONUP and e.button == 1:
             if self._dragging:
@@ -171,6 +174,11 @@ class WindowManager:
 
     def get(self, id: str) -> Optional[ModalWindow]:
         return self._wins.get(id)
+    
+    def set_locked(self, id: str, locked: bool) -> None:
+        w = self._wins.get(id)
+        if w:
+            w.draggable = not locked
 
     def add(self, win: ModalWindow) -> None:
         self._wins[win.id] = win

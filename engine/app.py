@@ -407,6 +407,7 @@ class GameApp:
             title="Settings",
             theme=self.theme,
             content_draw=self._draw_settings_content,
+            draggable=False, # Locked in place
         )
 
     def _draw_settings_content(self, surface: pygame.Surface, rect: pygame.Rect) -> None:
