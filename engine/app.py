@@ -11,6 +11,7 @@ from engine.ui.background_manager import BackgroundManager
 from engine.ui.widgets.bottom_bar import BottomBar, BottomBarButton
 from engine.ui.widgets.top_icons import TopIcons, IconButton
 from engine.ui.widgets.window_panel import WindowManager, ModalWindow
+from engine.resources import after_display_init
 
 class GameApp:
     def __init__(self, cfg: AppCfg):
@@ -23,6 +24,7 @@ class GameApp:
         # Set window size and title
         pygame.display.set_caption(cfg.window.title)
         self.screen = pygame.display.set_mode((cfg.window.width, cfg.window.height), flags=pygame.RESIZABLE | pygame.SCALED | pygame.DOUBLEBUF)
+        after_display_init()
         
         # Load default settings
         self.defaults = load_ui_defaults("game/config/defaults.yaml")
