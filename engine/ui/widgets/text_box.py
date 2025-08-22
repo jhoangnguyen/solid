@@ -34,7 +34,7 @@ class TextBox:
         "_scratch",
         )
 
-    def __init__(self, rect: pygame.Rect, theme: Theme, reveal: Optional[RevealParams] = None):
+    def __init__(self, rect: pygame.Rect, theme: Theme, fonts: FontCache, reveal: Optional[RevealParams] = None):
         """ 
         Creates a textbox instance.
             - Rect - Any rect passed in will become a textbox
@@ -50,7 +50,7 @@ class TextBox:
         self.opacity: float = 1.0
 
         self.model = TextModel(reveal)
-        self.fonts = FontCache()
+        self.fonts = fonts
         self.view = TextView(theme, self.fonts)
         self.scroller = ScrollModel(content_h=0, viewport_h=self.viewport_height, offset=0.0)
 

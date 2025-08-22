@@ -27,11 +27,11 @@ class TopIcons:
         self._down_id: Optional[str] = None
         self._count = int(count)
         
-        size_frac: float | None = None          # 0..1 of screen height
-        margin_frac: float | None = None        # 0..1 of screen height
-        gap_frac: float | None = None           # 0..1 of screen height
-        ring_px_frac: float | None = None       # 0..1 of screen height
-        corner_radius_frac: float | None = None # 0..1 of *icon size*
+        self.size_frac: float | None = None          # 0..1 of screen height
+        self.margin_frac: float | None = None        # 0..1 of screen height
+        self.gap_frac: float | None = None           # 0..1 of screen height
+        self.ring_px_frac: float | None = None       # 0..1 of screen height
+        self.corner_radius_frac: float | None = None # 0..1 of *icon size*
 
     # -------- public API ----------
     def set_icons(self, icons: Iterable[IconButton]) -> None:
