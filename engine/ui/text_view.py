@@ -303,22 +303,21 @@ class TextView:
 
         # 4) Render once (with color override if present)
         surfaces, height = self.layout.render_lines(lines, color=color_override)
-        measure = self.layout.font.size  # fast width measure for the same font
 
         # 5) Per-line cumulative widths for typewriter clipping
         prefix_w: List[List[int]] = []
         for s in lines:
-            widths = [0]
-            for i in range(1, len(s) + 1):
-                widths.append(measure(s[:i])[0])
-            prefix_w.append(widths)
+            prefix_w.append(self.layout.measure_prefix_widths_for_line(s))
 
-        # 6) Build lean layout object
-        total_chars = sum(len(s) for s in lines)
+        # 6) Store visible (tag-stripped) text for typing counts
+        visible_lines = [self.layout._strip_markup(s) for s in lines]
+        total_chars = sum(len(s) for s in visible_lines)
+
+        # 7) Build layout
         lay = _Layout(
             surfaces=surfaces,
             height=height,
-            lines=lines,
+            lines=visible_lines,
             prefix_w=prefix_w,
             total_chars=total_chars,
         )
