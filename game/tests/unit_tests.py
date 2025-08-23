@@ -322,5 +322,43 @@ class TestNonCombatSkillChecksDice(unittest.TestCase):
         total = roll.total + fynn.noncombat.stealth
         self.assertLess(total, 17)
 
+# Uses real RNG (no seed) to report pass/fail of a single Stealth check.
+class TestNonCombatSkillChecksDiceRandom(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        debug("=====================================")
+        debug("== TestNonCombatSkillChecksDiceRandom start ==")
+        debug("=====================================")
+        
+    def test_fynn_stealth_dc17_unseeded_informational(self):
+        """Unseeded 3d6 Stealth(5) vs DC 17: print pass/fail outcome."""
+        from game.rules.dice import Dice, RNG  # local import to avoid path issues
+        fynn = CharacterSheet(level=30, noncombat=NonCombat(stealth=5))
+        DC = 17
+
+        # Unseeded RNG → non-deterministic result each run
+        try:
+            rng = RNG()  # your wrapper around random.Random()
+        except Exception:
+            import random
+            rng = random.Random()
+
+        roll = Dice(3, 6).roll(rng)     # Fynn is level 30 → 3 dice
+        total = roll.total + fynn.noncombat.stealth
+        success = total >= DC
+
+        # Try to show individual faces if your Dice result exposes them
+        faces = getattr(roll, "faces", None) or getattr(roll, "values", None)
+        if faces:
+            detail = f"3d6={'+'.join(map(str, faces))} (={roll.total})"
+        else:
+            detail = f"3d6 total={roll.total}"
+
+        print(f"[RANDOM CHECK] {detail} + Stealth(5) = {total} vs DC {DC} → "
+              f"{'SUCCESS' if success else 'FAIL'}")
+
+        # Keep the test always green (it's informational)
+        self.assertTrue(True)
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
