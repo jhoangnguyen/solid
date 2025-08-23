@@ -5,7 +5,7 @@ fynn = CharacterSheet(
     level=30,
     speed=4.0,
     dice_sides=6,
-    dice_count=3,  # per doc: L30 example rolls 3 dice
+    dice_count=4,  # per doc: L30 example rolls 3 dice
 
     noncombat=NonCombat(
         # section buckets

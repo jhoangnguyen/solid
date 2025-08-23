@@ -1,4 +1,3 @@
-# --- Inventory system (drop into game/rules/stats.py) -------------------------
 from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import List, Dict, Iterable, Optional

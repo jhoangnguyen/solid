@@ -67,7 +67,7 @@ class Combat:
     # Dexterity (Lethality)
     ranged_atk: int = 0        # chance + ranged phys scaling
     dodge: int = 0             # flat dodge threshold
-    crit_damage: int = 0       # % per point (base 150%)
+    crit_damage: float = 0.0       # % per point (base 150%)
 
     # Magic (Command)
     magic_atk_arcane: int = 0  # chance + arcane dmg scaling
@@ -77,7 +77,10 @@ class Combat:
     # Spirit (Wish)
     magic_atk_spirit: int = 0  # chance + spirit dmg scaling
     debuff_resist: int = 0     # flat spirit/aura/debuff resist
-    crit_rate: int = 0         # % per point (base 5%)
+    crit_rate: float = 0.0         # % per point (base 5%)
+
+    base_crit_chance_pct: float = 5.0      # default base chance (set to 0.0 if you want only crit_rate)
+    crit_multiplier: float | None = None   # if set, use this instead of (1.5 + crit_damage%)
 
     def section_totals(self) -> Dict[str, int]:
         """Convenience: totals per core section based on their sub-skills."""
