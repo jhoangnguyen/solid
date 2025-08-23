@@ -3,6 +3,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from collections import deque
 from typing import Deque, List, Tuple, Optional
+import re
+
+_TAG_RE_TM = re.compile(r"\{/?(?:b|i)\}")
+
+def _strip_markup_for_timing(s: str) -> str:
+    return _TAG_RE_TM.sub("", s or "")
 
 @dataclass
 class RevealParams:
@@ -178,7 +184,7 @@ class TextModel:
         rp = self.reveal
         is_typewriter = animated and (rp.intro_offset_px == 0)
         if is_typewriter:
-            dur, cm = self._compute_typewriter_timing(text, rp)
+            dur, cm = self._compute_typewriter_timing(_strip_markup_for_timing(text), rp)
             return Entry(
                 text=text,
                 t=0.0,
