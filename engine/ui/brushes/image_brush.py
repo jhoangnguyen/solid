@@ -1,8 +1,10 @@
 from __future__ import annotations
 from typing import Optional, Tuple
+from engine.resources import load_image
 import pygame
 
 _BG_MODES = ("cover", "contain", "stretch", "center", "tile")
+_assets_prefix = "game/assets/"
 
 class ImageBrush:
     """
@@ -35,7 +37,8 @@ class ImageBrush:
             self._orig = None
             self._cache_surf = None
             return
-        self._orig = pygame.image.load(path).convert_alpha()
+        rel = path[len(_assets_prefix):] if path.startswith(_assets_prefix) else path
+        self._orig = load_image(rel)
         self._cache_surf = None
         
     def set_mode(self, mode: str) -> None:
@@ -60,7 +63,6 @@ class ImageBrush:
         
         # Prepare a target surface exactly the size of the inner rect
         # we'll clip the image to rounded corners here
-        # target = pygame.Surface((inner.w, inner.h), pygame.SRCALPHA)
         
         # Build the image content on `content`
         content = self._build_content((inner.w, inner.h)).copy()
