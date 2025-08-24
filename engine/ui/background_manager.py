@@ -32,12 +32,15 @@ class _Channel:
         self.fade_t = 0.0
         self.fade_dur = 0.0
         self.active = False
-        self.last_key: Optional[tuple] = None # (path, mode, tint)        
-    
+        self.last_key: Optional[tuple] = None # (path, mode, tint)   
+        
 class BackgroundManager:
     """ Owns the window background, supports seamless crossfades. """
     def __init__(self) -> None:
         self._slots: Dict[str, _Channel] = {}
+        self._fade_buf = None
+        self._fade_buf_size = (0, 0)     
+    
         
     def _slot(self, name: str) -> _Channel:
         if name not in self._slots:
@@ -48,6 +51,12 @@ class BackgroundManager:
         brush.set_image(spec.image_path)
         brush.set_mode(spec.mode)
         brush.tint_rgba = spec.tint_rgba
+        
+    def _get_fade_buf(self, size):
+        if self._fade_buf is None or self._fade_buf_size != size:
+            self._fade_buf = pygame.Surface(size, pygame.SRCALPHA)
+            self._fade_buf_size = size
+        return self._fade_buf
         
     def set(self, spec_any: Any, *, slot: str = "window", transition: str = "crossfade", duration: float = 0.35) -> None:
         """ Set background from YAML spec. If none, do nothing. """
@@ -108,7 +117,8 @@ class BackgroundManager:
         ch.current.draw(surface, rect)
         if ch.active and ch.next:
             alpha = int(255 * (ch.fade_t / ch.fade_dur)) if ch.fade_dur > 0 else 255
-            temp = pygame.Surface(rect.size, pygame.SRCALPHA)
+            temp = self._get_fade_buf(rect.size)
+            temp.fill((0,0,0,0))  # clear
             ch.next.draw(temp, temp.get_rect())
             temp.set_alpha(alpha)
             surface.blit(temp, rect.topleft) 

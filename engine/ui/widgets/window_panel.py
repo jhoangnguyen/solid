@@ -390,9 +390,6 @@ class WindowManager:
     def draw(self, surface: pygame.Surface) -> None:
         if not self.any_open():
             return
-        
-        if not self.any_open():
-            return
         # Optional dimmer behind windows
         if self._should_dim_background():
             self._draw_backdrop(surface=surface)

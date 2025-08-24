@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 import sys
 import logging
 from pathlib import Path
@@ -160,7 +159,7 @@ def after_display_init() -> None:
     _image_cache.update(to_update)
 
 
-# --- (Optional) helpers you'll likely want later ------------------------------
+# --- Helpers for later ------------------------------
 
 def clear_image_cache() -> None:
     _image_cache.clear()
