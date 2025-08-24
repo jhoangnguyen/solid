@@ -118,6 +118,11 @@ class NovelScene(Scene):
 
         # Simple clock for per-scene timing if you need it
         self.clock = pygame.time.Clock()
+        
+        self._font_base = int(self.theme.font_size)      # remember the starting font size
+        self._design_h = 720                             # design height baseline
+        self._font_scale_min = 0.80                      # allow down to 80% of base
+        self._font_scale_max = 1.75                      # allow up to 175% of base
 
     # --- Scene lifecycle ----------------------------------------------------
     def on_enter(self, prev: Optional[Scene]) -> None:
@@ -330,12 +335,15 @@ class NovelScene(Scene):
         """Scale the theme font size relative to window height and rebuild layouts."""
         try:
             sh = self.screen.get_height()
-            base = max(1, 720)  # assume design at 720h if you don't track a base
-            scaled = int(round(self.theme.font_size * (sh / base)))
-            cap = max(self.theme.font_size, min(int(self.theme.font_size * 1.75), scaled))
-            if cap != self.theme.font_size:
-                self.theme.font_size = cap
-                # Push new theme to TextBox view + refresh caches/layouts
+            # scale against the *base* size, not the current (prevents ratcheting)
+            scaled = int(round(self._font_base * (sh / max(1, self._design_h))))
+            lo = max(1, int(round(self._font_base * self._font_scale_min)))
+            hi = max(lo, int(round(self._font_base * self._font_scale_max)))
+            new_size = max(lo, min(hi, scaled))
+
+            if new_size != int(self.theme.font_size):
+                self.theme.font_size = new_size
+                # Refresh textbox layout + font cache
                 self.textbox.view.set_theme(self.theme)
                 self.textbox.fonts.clear()
                 self.textbox.view.invalidate_layout()
