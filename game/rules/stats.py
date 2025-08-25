@@ -1,7 +1,7 @@
 # game/rules/stats.py
 from __future__ import annotations
 from dataclasses import dataclass, field
-from typing import Dict
+from typing import Dict, Optional
 from .inventory import Inventory
 
 
@@ -81,6 +81,9 @@ class Combat:
 
     base_crit_chance_pct: float = 5.0      # default base chance (set to 0.0 if you want only crit_rate)
     crit_multiplier: float | None = None   # if set, use this instead of (1.5 + crit_damage%)
+    
+    accuracy: Optional[int] = None  # if set, calc_acc() uses this
+    dodge: Optional[int] = None     # if set, calc_dod() uses this
 
     def section_totals(self) -> Dict[str, int]:
         """Convenience: totals per core section based on their sub-skills."""
@@ -113,6 +116,8 @@ class CharacterSheet:
     combat: Combat = field(default_factory=Combat)
     
     inventory: Inventory = field(default_factory=Inventory)
+    current_hp: Optional[int] = None
+    current_mp: Optional[int] = None
 
     # --- Derived helpers (pure math; no side effects) ------------------------
 
@@ -127,6 +132,16 @@ class CharacterSheet:
             "combat": self.combat.total_points(),
         }
 
+    def ensure_resources(self) -> None:
+        if self.current_hp is None:
+            self.current_hp = int(self.fortitude_hp())
+        if self.current_mp is None:
+            self.current_mp = int(self.max_mp())
+            
+    def restore_full(self) -> None:
+        self.current_hp = int(self.fortitude_hp())
+        self.current_mp = int(self.max_mp())
+        
     def fortitude_hp(self) -> int:
         """
         Fortitude / HP:

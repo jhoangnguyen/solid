@@ -1,4 +1,3 @@
-# game/rules/combat.py
 from __future__ import annotations
 from dataclasses import dataclass
 from enum import Enum
@@ -11,9 +10,62 @@ except Exception:  # pragma: no cover
     import random as RNG  # fallback; has randint
 
 from game.rules.stats import CharacterSheet, Combat
+import random
 
+EVASION_P_MIN = 0.07
+EVASION_P_MAX = 0.93
+EVASION_SCALE = 1.0 # c_ev (how strongly DOD counter ACC)
 
 # ---- helpers ---------------------------------------------------------------
+
+def _clamp(x: float, lo: float, hi: float) -> float:
+    return lo if x < lo else hi if x > hi else x
+
+def calc_acc(attacker) -> int:
+    """
+    Returns the attacker's Accuracy rating.
+    Priority:
+      1) attacker.combat.accuracy if present
+      2) derive from attributes (DEX, level) if available
+      3) safe default
+    """
+    try:
+        v = getattr(attacker.combat, "accuracy", None)
+        if v is not None:
+            return int(v)
+    except AttributeError:
+        pass
+
+    # Derive: 2*Level baseline + DEX (lightweight, tunable later)
+    lvl = getattr(attacker, "level", 1)
+    dex = getattr(getattr(attacker, "stats", attacker), "dex", 0)
+    return int(2 * lvl + dex)
+
+def calc_dod(defender) -> int:
+    """
+    Returns the defender's Dodge rating.
+    Priority:
+      1) defender.combat.dodge if present
+      2) derive from attributes (DEX, level) if available
+      3) safe default
+    """
+    try:
+        v = getattr(defender.combat, "dodge", None)
+        if v is not None:
+            return int(v)
+    except AttributeError:
+        pass
+
+    lvl = getattr(defender, "level", 1)
+    dex = getattr(getattr(defender, "stats", defender), "dex", 0)
+    return int(2 * lvl + dex)
+
+def evasion_chance(acc: int, dod: int, c_ev: float = EVASION_SCALE) -> float:
+    denom = acc + c_ev * max(0, dod)
+    if denom <= 0:
+        return EVASION_P_MIN
+    raw = acc / denom
+    return _clamp(raw, EVASION_P_MIN, EVASION_P_MAX)
 
 def _effective_dice_count(sheet: CharacterSheet) -> int:
     """
@@ -35,7 +87,7 @@ def _defense_threshold(cb: Combat, kind: "AttackKind") -> int:
     # - Physical attacks check vs max(block, dodge).
     # - Arcane checks vs magic_resist; Spirit checks vs debuff_resist.
     if kind in (AttackKind.MELEE, AttackKind.RANGED):
-        return max(cb.block, cb.dodge)
+        return cb.block
     if kind is AttackKind.ARCANE:
         return cb.magic_resist
     if kind is AttackKind.SPIRIT:
@@ -101,11 +153,18 @@ class BattleState:
 
     @classmethod
     def from_sheet(cls, s: CharacterSheet) -> "BattleState":
+        # Ensure starting values are present
+        if hasattr(s, "ensure_resources"):
+            s.ensure_resources()
+
+        hp0 = s.current_hp if getattr(s, "current_hp", None) is not None else int(s.fortitude_hp())
+        mp0 = s.current_mp if getattr(s, "current_mp", None) is not None else int(s.max_mp())
+
         return cls(
             name=s.name or "Unknown",
             sheet=s,
-            hp=s.fortitude_hp(),  # Lv * (10 + hp_scaling)
-            mp=s.max_mp(),        # Lv * (10 + mana_scaling)
+            hp=int(hp0),
+            mp=int(mp0),
         )
 
     def defeated(self) -> bool:
@@ -127,84 +186,38 @@ class AutoBattle:
         self.B = BattleState.from_sheet(b)
         self.kind = kind
 
-    # def _step_attack(self, atk: BattleState, dfn: BattleState, rng: RNG) -> AttackLog:
-    #     count = _effective_dice_count(atk.sheet)
-    #     sides = getattr(atk.sheet, "dice_sides", 6)
-    #     atk_mod = _attack_mod(atk.sheet.combat, self.kind)
-    #     thr    = _defense_threshold(dfn.sheet.combat, self.kind)
-
-    #     # roll crit first so it can amplify the to-hit roll
-    #     crit, mult = _crit_roll(rng, atk.sheet.combat)
-
-    #     # --- To-hit ---
-    #     hit_roll = Dice(count, sides).roll(rng)
-    #     attack_total = hit_roll.total + atk_mod
-    #     if crit:
-    #         attack_total = int(attack_total * mult)  # apply crit to the to-hit total
-
-    #     hit = (attack_total >= thr)  # tie still succeeds
-
-    #     log = AttackLog(
-    #         attacker=atk.name, defender=dfn.name, kind=self.kind,
-    #         hit=hit, attack_total=attack_total, attack_faces=hit_roll.rolls, threshold=thr,
-    #         crit=crit, crit_mult=mult
-    #     )
-
-    #     if not hit:
-    #         if self.kind in (AttackKind.MELEE, AttackKind.RANGED):
-    #             log.note = "Blocked" if dfn.sheet.combat.block >= dfn.sheet.combat.dodge else "Dodged"
-    #         else:
-    #             log.note = "Resisted"
-    #         # optional clarity when a crit still misses:
-    #         if crit:
-    #             log.note += " (crit triggered)"
-    #         log.defender_hp_after, log.defender_mp_after = dfn.hp, dfn.mp
-    #         return log
-
-    #     # --- Damage ---
-    #     dmg_roll = Dice(count, sides).roll(rng)
-    #     raw = dmg_roll.total + atk_mod
-    #     if crit:
-    #         raw = int(raw * mult)  # apply the same crit to damage
-
-    #     dmg = max(0, raw)
-
-    #     # Apply to defender with HP→MP spill at 10:1 after HP=0
-    #     if dfn.hp > 0:
-    #         if dmg >= dfn.hp:
-    #             overflow = dmg - dfn.hp
-    #             dfn.hp = 0
-    #             if overflow > 0:
-    #                 # drain MP at 10:1 (ceil)
-    #                 mp_loss = (overflow + 9) // 10
-    #                 dfn.mp = max(0, dfn.mp - mp_loss)
-    #         else:
-    #             dfn.hp -= max(0, dmg)
-    #     else:
-    #         # Already at 0 HP → all damage drains MP at 10:1
-    #         mp_loss = (dmg + 9) // 10
-    #         dfn.mp = max(0, dfn.mp - mp_loss)
-
-    #     log.damage = dmg
-    #     log.damage_faces = dmg_roll.rolls
-    #     log.crit = crit
-    #     log.crit_mult = mult
-    #     log.defender_hp_after, log.defender_mp_after = dfn.hp, dfn.mp
-    #     return log
-
     def _step_attack(self, atk: BattleState, dfn: BattleState, rng: RNG) -> AttackLog:
         count = _effective_dice_count(atk.sheet)
         sides = getattr(atk.sheet, "dice_sides", 6)
         atk_mod = _attack_mod(atk.sheet.combat, self.kind)
         thr    = _defense_threshold(dfn.sheet.combat, self.kind)
 
+        acc = calc_acc(atk.sheet)       # uses sheet.combat.accuracy if present; else level/DEX
+        dod = calc_dod(dfn.sheet)       # uses sheet.combat.dodge    if present; else level/DEX
+        p_hit = evasion_chance(acc, dod)
+
+        u = rng.random() if hasattr(rng, "random") else random.random()
+        if u > p_hit:
+            # Build early log for an evaded attack and return.
+            log = AttackLog(
+                attacker=atk.name, defender=dfn.name, kind=self.kind,
+                hit=False, attack_total=0, attack_faces=[], threshold=thr,
+                crit=False, crit_mult=1.0, base_attack_total=0
+            )
+            if self.kind in (AttackKind.MELEE, AttackKind.RANGED):
+                log.note = f"Dodged (evasion p={p_hit:.2f}, roll={u:.2f}; ACC {acc} vs DOD {dod})"
+            else:
+                log.note = f"Resisted (evasion p={p_hit:.2f}, roll={u:.2f}; ACC {acc} vs DOD {dod})"
+            log.defender_hp_after, log.defender_mp_after = dfn.hp, dfn.mp
+            return log
+    
         # roll crit first so it can affect to-hit and damage
         crit, mult = _crit_roll(rng, atk.sheet.combat)
 
         # --- To-hit ---
         hit_roll = Dice(count, sides).roll(rng)
         base_attack_total = hit_roll.total + atk_mod
-        attack_total = int(base_attack_total * mult) if crit else base_attack_total
+        attack_total = base_attack_total
         hit = (attack_total >= thr)  # tie succeeds
 
         log = AttackLog(
@@ -215,7 +228,7 @@ class AutoBattle:
 
         if not hit:
             if self.kind in (AttackKind.MELEE, AttackKind.RANGED):
-                log.note = "Blocked" if dfn.sheet.combat.block >= dfn.sheet.combat.dodge else "Dodged"
+                log.note = "Blocked"
             else:
                 log.note = "Resisted"
             if crit:
@@ -271,5 +284,15 @@ class AutoBattle:
                 logs.append(self._step_attack(self.B, self.A, rng))
                 tB += pB
             actions += 1
+            
+        if hasattr(self.A.sheet, "current_hp"):
+            self.A.sheet.current_hp = int(self.A.hp)
+        if hasattr(self.A.sheet, "current_mp"):
+            self.A.sheet.current_mp = int(self.A.mp)
+
+        if hasattr(self.B.sheet, "current_hp"):
+            self.B.sheet.current_hp = int(self.B.hp)
+        if hasattr(self.B.sheet, "current_mp"):
+            self.B.sheet.current_mp = int(self.B.mp)
 
         return self.A, self.B, logs

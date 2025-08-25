@@ -11,6 +11,7 @@ from game.rules.inventory import (
 )
 
 from game.rules.dice import Dice
+from game.rules.combat import evasion_chance
 
 
 # --- Lightweight debug helper (opt-in via TEST_DEBUG=1) -----------------------
@@ -360,5 +361,30 @@ class TestNonCombatSkillChecksDiceRandom(unittest.TestCase):
         # Keep the test always green (it's informational)
         self.assertTrue(True)
 
+class TestEvasion(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        debug("=====================================")
+        debug("== TestEvasion start ==")
+        debug("=====================================")
+        
+    def test_parity_is_coinflipish(self):
+        """Checks if evasion chance is roughly a coin flip"""
+        evasion_p = evasion_chance(100, 100)
+        print(f"[TEST PARITY] {evasion_p}")
+        self.assertTrue(0.45 <= evasion_chance(100, 100) <= 0.55)
+
+    def test_high_dodge_pushes_low(self):
+        """Checks if high dodge succeeds against low accuracy"""
+        p = evasion_chance(50, 200)
+        print(f"[TEST HIGH DODGE] {p}")
+        self.assertTrue(0.07 <= p < 0.30)  # at or above floor, but low
+
+    def test_high_acc_pushes_high(self):
+        """Checks if high accuracy succeeds against low dodge"""
+        p = evasion_chance(200, 50)
+        print(f"[TEST HIGH ACCURACY] {p}")
+        self.assertTrue(0.70 <= p <= 0.93)
+        
 if __name__ == "__main__":
     unittest.main(verbosity=2)
